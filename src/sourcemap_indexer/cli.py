@@ -20,7 +20,13 @@ from sourcemap_indexer.infra.migrator import init_db
 from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
 from sourcemap_indexer.lib.either import Left
 
-app = typer.Typer(help="Codebase indexer powered by LLM")
+_APP_HELP = (
+    "Codebase indexer powered by LLM\n\n"
+    "Manage the tool:\n\n"
+    "  uv tool upgrade sourcemap-indexer\n\n"
+    "  uv tool uninstall sourcemap-indexer"
+)
+app = typer.Typer(help=_APP_HELP)
 
 _DEFAULT_SOURCEMAPIGNORE = ".venv/\n.git/\n__pycache__/\n*.pyc\ndist/\nbuild/\n*.db\n*.sqlite\n"
 
