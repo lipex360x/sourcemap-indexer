@@ -42,7 +42,7 @@ def _open_repo(root: Path) -> SqliteItemRepository:
     return SqliteItemRepository(result.value)
 
 
-@app.command()
+@app.command(help="Create .docs/maps/ directory and initialize the SQLite index.")
 def init(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
     maps_dir = project_root / ".docs" / "maps"
@@ -58,7 +58,7 @@ def init(root: str | None = typer.Option(None, help="Project root")) -> None:
     typer.echo(f"Initialized sourcemap at {project_root}")
 
 
-@app.command()
+@app.command(help="Scan the project and write file metadata to index.yaml.")
 def walk(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
     output = index_yaml_path(project_root)
@@ -69,7 +69,7 @@ def walk(root: str | None = typer.Option(None, help="Project root")) -> None:
     typer.echo(f"Walked {walk_result.value} files → {output}")
 
 
-@app.command()
+@app.command(help="Import index.yaml into the SQLite database (insert / update / soft-delete).")
 def sync(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
     repo = _open_repo(project_root)
@@ -85,7 +85,7 @@ def sync(root: str | None = typer.Option(None, help="Project root")) -> None:
     )
 
 
-@app.command()
+@app.command(help="Send pending files to the LLM and store purpose, tags, layer, and side effects.")
 def enrich(
     root: str | None = typer.Option(None, help="Project root"),
     limit: int | None = typer.Option(None, "--limit", help="Max items to enrich"),
@@ -119,7 +119,7 @@ def enrich(
         typer.echo(f"  ! {error}", err=True)
 
 
-@app.command()
+@app.command(help="Search enriched files by tag, layer, or language.")
 def find(
     root: str | None = typer.Option(None, help="Project root"),
     tag: str | None = typer.Option(None, "--tag", help="Filter by tag"),
@@ -144,7 +144,7 @@ def find(
         typer.echo(f"{item.path}\t{item.language}\t{item.layer}\t{purpose}")
 
 
-@app.command()
+@app.command(help="Show full metadata for a specific file path.")
 def show(
     path: str = typer.Argument(help="Relative file path"),
     root: str | None = typer.Option(None, help="Project root"),
@@ -170,7 +170,7 @@ def show(
     typer.echo(f"size:      {item.size_bytes} bytes")
 
 
-@app.command()
+@app.command(help="Show total, enriched, and pending counts broken down by layer and language.")
 def stats(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
     repo = _open_repo(project_root)
@@ -196,7 +196,7 @@ def stats(root: str | None = typer.Option(None, help="Project root")) -> None:
         typer.echo(f"  {lang}: {count}")
 
 
-@app.command()
+@app.command(help="List files whose content changed since the last enrich run.")
 def stale(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
     repo = _open_repo(project_root)
@@ -216,7 +216,7 @@ def stale(root: str | None = typer.Option(None, help="Project root")) -> None:
         typer.echo(f"{item.path}\t(content changed since last enrich)")
 
 
-@app.command()
+@app.command(help="Delete the index (offers a timestamped backup before wiping).")
 def reset(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
     maps_dir = project_root / ".docs" / "maps"
@@ -244,7 +244,7 @@ def reset(root: str | None = typer.Option(None, help="Project root")) -> None:
     typer.echo("Reset complete. Run: sourcemap init && sourcemap walk && sourcemap sync")
 
 
-@app.command()
+@app.command(help="Restore index.db from a previously saved .bak file.")
 def restore(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
     maps_dir = project_root / ".docs" / "maps"
@@ -317,7 +317,7 @@ def _run_query(db_file: Path, sql: str) -> None:
         conn.close()
 
 
-@app.command()
+@app.command(help="Run a free-form SQL query against the index database.")
 def query(
     sql: str = typer.Argument(help="SQL query to run against the index"),
     root: str | None = typer.Option(None, help="Project root"),
@@ -325,26 +325,26 @@ def query(
     _run_query(db_path(_resolve_root(root)), sql)
 
 
-@app.command()
+@app.command(help="Layer × language matrix — project structure at a glance.")
 def overview(root: str | None = typer.Option(None, help="Project root")) -> None:
     _run_query(db_path(_resolve_root(root)), _SQL_OVERVIEW)
 
 
-@app.command()
+@app.command(help="List enriched domain-layer files with their purpose.")
 def domain(root: str | None = typer.Option(None, help="Project root")) -> None:
     _run_query(db_path(_resolve_root(root)), _SQL_DOMAIN)
 
 
-@app.command()
+@app.command(help="List files with network or git side effects (I/O boundaries).")
 def effects(root: str | None = typer.Option(None, help="Project root")) -> None:
     _run_query(db_path(_resolve_root(root)), _SQL_EFFECTS)
 
 
-@app.command()
+@app.command(help="Top 30 semantic tags by frequency across the codebase.")
 def tags(root: str | None = typer.Option(None, help="Project root")) -> None:
     _run_query(db_path(_resolve_root(root)), _SQL_TAGS)
 
 
-@app.command()
+@app.command(help="List experimental or deprecated files — risk areas.")
 def unstable(root: str | None = typer.Option(None, help="Project root")) -> None:
     _run_query(db_path(_resolve_root(root)), _SQL_UNSTABLE)
