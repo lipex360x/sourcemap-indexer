@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import sqlite3
 import time
+from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -219,6 +220,8 @@ def stale(root: str | None = typer.Option(None, help="Project root")) -> None:
 def reset(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
     maps_dir = project_root / ".docs" / "maps"
+    db_file = db_path(project_root)
+    index_yaml = index_yaml_path(project_root)
     if not maps_dir.exists():
         typer.echo("Error: index not found. Nothing to reset.", err=True)
         raise typer.Exit(1)
@@ -229,8 +232,39 @@ def reset(root: str | None = typer.Option(None, help="Project root")) -> None:
     if not typer.confirm("Confirm reset?"):
         typer.echo("Cancelled.")
         return
-    shutil.rmtree(maps_dir)
+    if db_file.exists() and typer.confirm("Backup current database?", default=True):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup = maps_dir / f"index.{timestamp}.bak"
+        shutil.copy2(db_file, backup)
+        typer.echo(f"Backup saved: {backup.name}")
+    if db_file.exists():
+        db_file.unlink()
+    if index_yaml.exists():
+        index_yaml.unlink()
     typer.echo("Reset complete. Run: sourcemap init && sourcemap walk && sourcemap sync")
+
+
+@app.command()
+def restore(root: str | None = typer.Option(None, help="Project root")) -> None:
+    project_root = _resolve_root(root)
+    maps_dir = project_root / ".docs" / "maps"
+    if not maps_dir.exists():
+        typer.echo("Error: no maps directory found.", err=True)
+        raise typer.Exit(1)
+    backups = sorted(maps_dir.glob("index.*.bak"), reverse=True)
+    if not backups:
+        typer.echo("No backups found.")
+        return
+    typer.echo("Available backups:")
+    for i, bak in enumerate(backups, 1):
+        typer.echo(f"  [{i}] {bak.name}")
+    choice = typer.prompt("Select backup to restore", type=int)
+    if choice < 1 or choice > len(backups):
+        typer.echo("Error: invalid selection.", err=True)
+        raise typer.Exit(1)
+    selected = backups[choice - 1]
+    shutil.copy2(selected, db_path(project_root))
+    typer.echo(f"Restored from {selected.name}")
 
 
 _SQL_OVERVIEW = (

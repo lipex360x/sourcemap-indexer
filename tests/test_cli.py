@@ -260,13 +260,31 @@ def test_unstable_no_results_before_enrich(tmp_path: Path) -> None:
     assert "no results" in result.output
 
 
-def test_reset_confirmed_deletes_maps(tmp_path: Path) -> None:
+def test_reset_confirmed_deletes_db(tmp_path: Path) -> None:
     _init_sync(tmp_path)
-    assert (tmp_path / ".docs" / "maps").exists()
-    result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\n")
+    db_file = tmp_path / ".docs" / "maps" / "index.db"
+    assert db_file.exists()
+    result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\nn\n")
     assert result.exit_code == 0
-    assert not (tmp_path / ".docs" / "maps").exists()
+    assert not db_file.exists()
     assert "irreversible" in result.output
+
+
+def test_reset_with_backup_creates_bak_file(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    maps_dir = tmp_path / ".docs" / "maps"
+    result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\ny\n")
+    assert result.exit_code == 0
+    bak_files = list(maps_dir.glob("index.*.bak"))
+    assert len(bak_files) == 1
+    assert "Backup saved" in result.output
+
+
+def test_reset_without_backup_no_bak_file(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    maps_dir = tmp_path / ".docs" / "maps"
+    runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\nn\n")
+    assert not list(maps_dir.glob("index.*.bak"))
 
 
 def test_reset_aborted_keeps_maps(tmp_path: Path) -> None:
@@ -279,4 +297,37 @@ def test_reset_aborted_keeps_maps(tmp_path: Path) -> None:
 
 def test_reset_no_index_exits(tmp_path: Path) -> None:
     result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\n")
+    assert result.exit_code != 0
+
+
+def test_restore_no_maps_dir_exits(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["restore", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_restore_no_backups_found(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["restore", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "No backups found" in result.output
+
+
+def test_restore_lists_and_restores_backup(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    maps_dir = tmp_path / ".docs" / "maps"
+    runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\ny\n")
+    bak_files = list(maps_dir.glob("index.*.bak"))
+    assert len(bak_files) == 1
+    result = runner.invoke(app, ["restore", "--root", str(tmp_path)], input="1\n")
+    assert result.exit_code == 0
+    assert "Restored from" in result.output
+    assert (maps_dir / "index.db").exists()
+
+
+def test_restore_invalid_selection_exits(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    maps_dir = tmp_path / ".docs" / "maps"
+    bak = maps_dir / "index.20240101_000000.bak"
+    bak.write_bytes(b"fake")
+    result = runner.invoke(app, ["restore", "--root", str(tmp_path)], input="99\n")
     assert result.exit_code != 0
