@@ -10,6 +10,20 @@ The goal: let an AI assistant understand large codebases through SQL queries ins
 uv tool install "git+https://github.com/lipex360x/sourcemap-indexer.git@main"
 ```
 
+To upgrade:
+
+```bash
+uv tool upgrade sourcemap-indexer
+```
+
+To uninstall:
+
+```bash
+uv tool uninstall sourcemap-indexer
+```
+
+The binary lives at `~/.local/bin/sourcemap`. The tool environment is at `~/.local/share/uv/tools/sourcemap-indexer/`.
+
 ## Quickstart
 
 ```bash
