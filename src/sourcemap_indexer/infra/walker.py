@@ -41,12 +41,12 @@ def detect_language(path: Path) -> Language:
 
 def load_ignore_patterns(root: Path) -> Either[str, pathspec.PathSpec]:
     patterns = list(DEFAULT_IGNORE)
-    ignore_file = root / ".sourcemapignore"
-    if ignore_file.exists():
-        try:
-            patterns.extend(ignore_file.read_text(encoding="utf-8").splitlines())
-        except OSError as error:
-            return left(f"ignore-read-error: {error}")
+    for ignore_file in (root / ".gitignore", root / ".sourcemapignore"):
+        if ignore_file.exists():
+            try:
+                patterns.extend(ignore_file.read_text(encoding="utf-8").splitlines())
+            except OSError as error:
+                return left(f"ignore-read-error: {error}")
     return right(pathspec.PathSpec.from_lines("gitignore", patterns))
 
 

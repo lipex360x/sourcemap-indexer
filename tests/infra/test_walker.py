@@ -71,6 +71,25 @@ def test_load_ignore_patterns_with_sourcemapignore(tmp_path: Path) -> None:
     assert spec.match_file("prod.env")
 
 
+def test_load_ignore_patterns_reads_gitignore(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text("vendor/\n*.log\n")
+    result = load_ignore_patterns(tmp_path)
+    assert isinstance(result, Right)
+    spec = result.value
+    assert spec.match_file("vendor/lib.js")
+    assert spec.match_file("app.log")
+
+
+def test_load_ignore_patterns_merges_gitignore_and_sourcemapignore(tmp_path: Path) -> None:
+    (tmp_path / ".gitignore").write_text("vendor/\n")
+    (tmp_path / ".sourcemapignore").write_text("secrets/\n")
+    result = load_ignore_patterns(tmp_path)
+    assert isinstance(result, Right)
+    spec = result.value
+    assert spec.match_file("vendor/lib.js")
+    assert spec.match_file("secrets/key.txt")
+
+
 def test_load_ignore_patterns_returns_left_on_read_error(tmp_path: Path) -> None:
     ignore_file = tmp_path / ".sourcemapignore"
     ignore_file.write_bytes(b"data")
