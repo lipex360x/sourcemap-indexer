@@ -14,6 +14,7 @@ from sourcemap_indexer.application.sync import run_sync
 from sourcemap_indexer.application.walk import run_walk
 from sourcemap_indexer.config import db_path, find_project_root, index_yaml_path
 from sourcemap_indexer.domain.value_objects import Language, Layer
+from sourcemap_indexer.infra.dotenv import load_dotenv
 from sourcemap_indexer.infra.llama_client import LlamaClient, from_environ
 from sourcemap_indexer.infra.migrator import init_db
 from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
@@ -102,6 +103,7 @@ def enrich(
     limit: int | None = typer.Option(None, "--limit", help="Max items to enrich"),
 ) -> None:
     project_root = _resolve_root(root)
+    load_dotenv(project_root / ".env")
     repo = _open_repo(project_root)
     config = from_environ()
     client = LlamaClient(config)

@@ -64,6 +64,18 @@ sourcemap stats   # overview: total, enriched, pending
 |----------|---------|-------------|
 | `SOURCEMAP_LLM_URL` | `http://localhost:1234/v1/chat/completions` | LLM endpoint |
 | `SOURCEMAP_LLM_MODEL` | `qwen/qwen3-coder-30b` | Model name |
+| `SOURCEMAP_LLM_API_KEY` | _(empty)_ | Bearer token for authenticated providers |
+
+`sourcemap enrich` automatically reads a `.env` file from the project root before resolving env vars, so you can keep credentials out of your shell profile:
+
+```ini
+# .env  (add to .gitignore)
+SOURCEMAP_LLM_URL=https://api.z.ai/api/coding/paas/v4/chat/completions
+SOURCEMAP_LLM_MODEL=glm-5.1
+SOURCEMAP_LLM_API_KEY=your-api-key
+```
+
+Variables already present in the environment take precedence over `.env` values.
 
 ## Ignoring files
 
@@ -80,11 +92,12 @@ secrets/
 
 ## Plugging in a different LLM
 
-The enrichment client targets any OpenAI-compatible endpoint:
+The enrichment client targets any OpenAI-compatible endpoint. Set the variables via shell or `.env`:
 
 ```bash
 export SOURCEMAP_LLM_URL=https://api.openai.com/v1/chat/completions
 export SOURCEMAP_LLM_MODEL=gpt-4o
+export SOURCEMAP_LLM_API_KEY=sk-...
 sourcemap enrich --limit 10
 ```
 
