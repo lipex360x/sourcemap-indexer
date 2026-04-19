@@ -38,6 +38,7 @@ class LlmConfig:
     temperature: float = 0.1
     max_tokens: int = 800
     timeout_seconds: float = 60.0
+    max_chars: int = 8000
 
 
 @dataclass(frozen=True)
@@ -105,6 +106,8 @@ class LlamaClient:
         self._http = http_client or httpx.Client(timeout=config.timeout_seconds)
 
     def enrich(self, path: str, language: Language, content: str) -> Either[str, EnrichmentResult]:
+        if len(content) > self._config.max_chars:
+            content = content[: self._config.max_chars]
         user_prompt = f"Path: {path}\nLanguage: {language}\n\n---\n{content}"
         body = {
             "model": self._config.model,

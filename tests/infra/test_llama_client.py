@@ -41,6 +41,27 @@ def test_llm_config_defaults() -> None:
     assert config.temperature == 0.1
     assert config.max_tokens == 800
     assert config.timeout_seconds == 60.0
+    assert config.max_chars == 8000
+
+
+def test_content_is_truncated_when_exceeds_max_chars() -> None:
+    captured: list[str] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        import json as _json
+
+        body = _json.loads(request.content)
+        captured.append(body["messages"][1]["content"])
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(capture)
+    http_client = httpx.Client(transport=transport)
+    config = LlmConfig(max_chars=10)
+    client = LlamaClient(config, http_client=http_client)
+    client.enrich("src/f.py", Language.PY, "A" * 100)
+    assert len(captured) == 1
+    assert "A" * 100 not in captured[0]
+    assert "A" * 10 in captured[0]
 
 
 def test_from_environ_reads_url(monkeypatch: pytest.MonkeyPatch) -> None:
