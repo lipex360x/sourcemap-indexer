@@ -223,14 +223,14 @@ def reset(root: str | None = typer.Option(None, help="Project root")) -> None:
         typer.echo("Error: index not found. Nothing to reset.", err=True)
         raise typer.Exit(1)
     typer.echo(
-        "ATENÇÃO: esta operação é irreversível. "
-        "O índice será deletado e precisará ser refeito com init + walk + sync + enrich."
+        "WARNING: this operation is irreversible. "
+        "The index will be deleted and must be rebuilt with init + walk + sync + enrich."
     )
-    if not typer.confirm("Confirma o reset?"):
-        typer.echo("Cancelado.")
+    if not typer.confirm("Confirm reset?"):
+        typer.echo("Cancelled.")
         return
     shutil.rmtree(maps_dir)
-    typer.echo("Reset concluído. Execute: sourcemap init && sourcemap walk && sourcemap sync")
+    typer.echo("Reset complete. Run: sourcemap init && sourcemap walk && sourcemap sync")
 
 
 _SQL_OVERVIEW = (

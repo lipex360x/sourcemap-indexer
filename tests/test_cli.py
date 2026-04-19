@@ -266,7 +266,7 @@ def test_reset_confirmed_deletes_maps(tmp_path: Path) -> None:
     result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\n")
     assert result.exit_code == 0
     assert not (tmp_path / ".docs" / "maps").exists()
-    assert "irreversível" in result.output
+    assert "irreversible" in result.output
 
 
 def test_reset_aborted_keeps_maps(tmp_path: Path) -> None:
@@ -274,7 +274,7 @@ def test_reset_aborted_keeps_maps(tmp_path: Path) -> None:
     result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="n\n")
     assert result.exit_code == 0
     assert (tmp_path / ".docs" / "maps").exists()
-    assert "Cancelado" in result.output
+    assert "Cancelled" in result.output
 
 
 def test_reset_no_index_exits(tmp_path: Path) -> None:
