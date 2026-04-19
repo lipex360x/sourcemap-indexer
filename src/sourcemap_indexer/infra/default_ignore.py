@@ -1,0 +1,25 @@
+from __future__ import annotations
+
+DEFAULT_IGNORE = [
+    "node_modules/",
+    ".git/",
+    ".venv/",
+    "__pycache__/",
+    "*.pyc",
+    ".sst/",
+    "*.meta",
+    "*.map",
+    "dist/",
+    "build/",
+    ".next/",
+    ".turbo/",
+    "coverage/",
+    "*.min.js",
+    "*.lock",
+    "package-lock.json",
+    ".mypy_cache/",
+    ".ruff_cache/",
+    ".pytest_cache/",
+    "*.db",
+    "*.sqlite",
+]
