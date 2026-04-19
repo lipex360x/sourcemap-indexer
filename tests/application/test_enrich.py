@@ -41,7 +41,7 @@ def _make_item(path: str, root: Path) -> Item:
 
 
 _VALID_RESULT = EnrichmentResult(
-    purpose="Ponto de entrada da aplicação",
+    purpose="Application entry point",
     tags=frozenset({"cli", "entry-point"}),
     layer=Layer.APPLICATION,
     stability=Stability.STABLE,

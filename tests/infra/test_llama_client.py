@@ -15,12 +15,12 @@ from sourcemap_indexer.infra.llama_client import (
 from sourcemap_indexer.lib.either import Left, Right
 
 _VALID_PAYLOAD = {
-    "purpose": "Valida tokens JWT",
+    "purpose": "Validates JWT tokens",
     "tags": ["auth", "jwt", "middleware"],
     "layer": "infra",
     "stability": "stable",
     "side_effects": ["network"],
-    "invariants": ["token deve expirar em 24h"],
+    "invariants": ["token must expire within 24h"],
 }
 
 
@@ -88,12 +88,12 @@ def test_enrich_returns_right_for_valid_response() -> None:
     client = _client_with(_mock_response(_VALID_PAYLOAD))
     result = client.enrich("src/auth.py", Language.PY, "def verify(token): ...")
     assert isinstance(result, Right)
-    assert result.value.purpose == "Valida tokens JWT"
+    assert result.value.purpose == "Validates JWT tokens"
     assert result.value.layer == Layer.INFRA
     assert result.value.stability == Stability.STABLE
     assert SideEffect.NETWORK in result.value.side_effects
     assert "auth" in result.value.tags
-    assert "token deve expirar em 24h" in result.value.invariants
+    assert "token must expire within 24h" in result.value.invariants
 
 
 def test_enrich_parses_json_inside_markdown_fence() -> None:
@@ -104,7 +104,7 @@ def test_enrich_parses_json_inside_markdown_fence() -> None:
     client = LlamaClient(LlmConfig(), http_client=http_client)
     result = client.enrich("src/auth.py", Language.PY, "code")
     assert isinstance(result, Right)
-    assert result.value.purpose == "Valida tokens JWT"
+    assert result.value.purpose == "Validates JWT tokens"
 
 
 def test_enrich_returns_left_for_invalid_json() -> None:
