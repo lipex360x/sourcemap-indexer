@@ -27,6 +27,7 @@ dev = [
   "bandit>=1.7",
   "pylint>=3.2",
   "build>=1.2",
+  "types-PyYAML>=6.0",
 ]
 
 [project.scripts]

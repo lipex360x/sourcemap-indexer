@@ -13,7 +13,7 @@ from sourcemap_indexer.domain.value_objects import (
 )
 from sourcemap_indexer.infra.migrator import init_db
 from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
-from sourcemap_indexer.lib.either import Right
+from sourcemap_indexer.lib.either import Left, Right
 
 
 def _make_item(
@@ -311,6 +311,64 @@ def test_search_filter_by_tags() -> None:
     paths = [i.path for i in result.value]
     assert "tagged.py" in paths
     assert "plain.py" not in paths
+
+
+def test_upsert_returns_left_on_db_error() -> None:
+    repo = _make_repo()
+    item = _make_item()
+    repo._connection.close()  # type: ignore[attr-defined]
+    result = repo.upsert(item)
+    assert isinstance(result, Left)
+    assert result.error.startswith("db-error")
+
+
+def test_find_by_path_returns_left_on_db_error() -> None:
+    repo = _make_repo()
+    repo._connection.close()  # type: ignore[attr-defined]
+    result = repo.find_by_path("any.py")
+    assert isinstance(result, Left)
+
+
+def test_find_by_id_returns_left_on_db_error() -> None:
+    repo = _make_repo()
+    repo._connection.close()  # type: ignore[attr-defined]
+    result = repo.find_by_id(ItemId.generate())
+    assert isinstance(result, Left)
+
+
+def test_find_needs_llm_returns_left_on_db_error() -> None:
+    repo = _make_repo()
+    repo._connection.close()  # type: ignore[attr-defined]
+    result = repo.find_needs_llm()
+    assert isinstance(result, Left)
+
+
+def test_find_all_paths_returns_left_on_db_error() -> None:
+    repo = _make_repo()
+    repo._connection.close()  # type: ignore[attr-defined]
+    result = repo.find_all_paths()
+    assert isinstance(result, Left)
+
+
+def test_soft_delete_returns_left_on_db_error() -> None:
+    repo = _make_repo()
+    repo._connection.close()  # type: ignore[attr-defined]
+    result = repo.soft_delete(ItemId.generate(), 0)
+    assert isinstance(result, Left)
+
+
+def test_search_returns_left_on_db_error() -> None:
+    repo = _make_repo()
+    repo._connection.close()  # type: ignore[attr-defined]
+    result = repo.search(tags=None, layer=None, language=None)
+    assert isinstance(result, Left)
+
+
+def test_search_with_tags_returns_left_on_db_error() -> None:
+    repo = _make_repo()
+    repo._connection.close()  # type: ignore[attr-defined]
+    result = repo.search(tags=["auth"], layer=None, language=None)
+    assert isinstance(result, Left)
 
 
 def test_llm_hash_round_trip() -> None:
