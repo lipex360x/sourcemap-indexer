@@ -113,6 +113,7 @@ def enrich(
     repo = _open_repo(project_root)
     config = from_environ()
     client = LlamaClient(config)
+    typer.echo(f"Model: {config.model}  ({config.url})")
     ping_result = client.ping()
     if isinstance(ping_result, Left):
         typer.echo(f"Error: LLM unreachable — {ping_result.error}", err=True)
