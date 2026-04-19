@@ -29,11 +29,8 @@ def project(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_init_walk_sync_full_cycle(project: Path) -> None:
+def test_init_walk_full_cycle(project: Path) -> None:
     result = runner.invoke(app, ["walk", "--root", str(project)])
-    assert result.exit_code == 0
-
-    result = runner.invoke(app, ["sync", "--root", str(project)])
     assert result.exit_code == 0
     assert "inserted=5" in result.output
 
@@ -45,16 +42,12 @@ def test_init_walk_sync_full_cycle(project: Path) -> None:
 
 def test_incremental_sync_after_changes(project: Path) -> None:
     runner.invoke(app, ["walk", "--root", str(project)])
-    runner.invoke(app, ["sync", "--root", str(project)])
 
     (project / "utils.py").write_text("def helper(): return 99\n")
     (project / "new_module.py").write_text("x = 42\n")
     (project / "run.sh").unlink()
 
     result = runner.invoke(app, ["walk", "--root", str(project)])
-    assert result.exit_code == 0
-
-    result = runner.invoke(app, ["sync", "--root", str(project)])
     assert result.exit_code == 0
     assert "updated=1" in result.output
     assert "inserted=1" in result.output
@@ -78,16 +71,14 @@ def test_enrich_with_fake_client(project: Path, monkeypatch: pytest.MonkeyPatch)
     )
 
     runner.invoke(app, ["walk", "--root", str(project)])
-    runner.invoke(app, ["sync", "--root", str(project)])
 
     result = runner.invoke(app, ["enrich", "--root", str(project)])
     assert result.exit_code == 0
     assert "enriched=5" in result.output
 
 
-def test_find_after_sync(project: Path) -> None:
+def test_find_after_walk(project: Path) -> None:
     runner.invoke(app, ["walk", "--root", str(project)])
-    runner.invoke(app, ["sync", "--root", str(project)])
 
     result = runner.invoke(app, ["find", "--root", str(project)])
     assert result.exit_code == 0
@@ -95,9 +86,8 @@ def test_find_after_sync(project: Path) -> None:
     assert "utils.py" in result.output
 
 
-def test_stats_after_sync(project: Path) -> None:
+def test_stats_after_walk(project: Path) -> None:
     runner.invoke(app, ["walk", "--root", str(project)])
-    runner.invoke(app, ["sync", "--root", str(project)])
 
     result = runner.invoke(app, ["stats", "--root", str(project)])
     assert result.exit_code == 0
@@ -107,7 +97,6 @@ def test_stats_after_sync(project: Path) -> None:
 
 def test_stale_after_content_change(project: Path) -> None:
     runner.invoke(app, ["walk", "--root", str(project)])
-    runner.invoke(app, ["sync", "--root", str(project)])
 
     conn = _db(project)
     fake_hash = "b" * 64
@@ -117,7 +106,6 @@ def test_stale_after_content_change(project: Path) -> None:
 
     (project / "main.py").write_text("def main(): return 42\n")
     runner.invoke(app, ["walk", "--root", str(project)])
-    runner.invoke(app, ["sync", "--root", str(project)])
 
     result = runner.invoke(app, ["stale", "--root", str(project)])
     assert result.exit_code == 0
@@ -126,7 +114,6 @@ def test_stale_after_content_change(project: Path) -> None:
 
 def test_show_item_details(project: Path) -> None:
     runner.invoke(app, ["walk", "--root", str(project)])
-    runner.invoke(app, ["sync", "--root", str(project)])
 
     result = runner.invoke(app, ["show", "main.py", "--root", str(project)])
     assert result.exit_code == 0

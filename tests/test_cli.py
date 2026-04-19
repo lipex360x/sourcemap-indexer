@@ -48,6 +48,14 @@ def test_walk_generates_yaml(tmp_path: Path) -> None:
     assert len(data["files"]) >= 1
 
 
+def test_walk_also_syncs_db(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text("x = 1\n")
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["walk", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "inserted" in result.output
+
+
 def test_walk_error_exits(tmp_path: Path) -> None:
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     ignore = tmp_path / ".sourcemapignore"
@@ -189,7 +197,6 @@ def _init_sync(tmp_path: Path) -> None:
     (tmp_path / "app.py").write_text("x = 1\n")
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     runner.invoke(app, ["walk", "--root", str(tmp_path)])
-    runner.invoke(app, ["sync", "--root", str(tmp_path)])
 
 
 def test_query_returns_results(tmp_path: Path) -> None:

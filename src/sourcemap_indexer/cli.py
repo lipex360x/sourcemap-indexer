@@ -58,7 +58,7 @@ def init(root: str | None = typer.Option(None, help="Project root")) -> None:
     typer.echo(f"Initialized sourcemap at {project_root}")
 
 
-@app.command(help="Scan the project and write file metadata to index.yaml.")
+@app.command(help="Scan the project and sync file metadata into the database.")
 def walk(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
     output = index_yaml_path(project_root)
@@ -67,6 +67,16 @@ def walk(root: str | None = typer.Option(None, help="Project root")) -> None:
         typer.echo(f"Error: {walk_result.error}", err=True)
         raise typer.Exit(1)
     typer.echo(f"Walked {walk_result.value} files → {output}")
+    repo = _open_repo(project_root)
+    sync_result = run_sync(output, repo)
+    if isinstance(sync_result, Left):
+        typer.echo(f"Error: {sync_result.error}", err=True)
+        raise typer.Exit(1)
+    report = sync_result.value
+    typer.echo(
+        f"Sync: inserted={report.inserted} updated={report.updated} "
+        f"soft_deleted={report.soft_deleted} unchanged={report.unchanged}"
+    )
 
 
 @app.command(help="Import index.yaml into the SQLite database (insert / update / soft-delete).")
