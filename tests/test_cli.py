@@ -183,3 +183,78 @@ def test_enrich_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
     assert result.exit_code != 0
+
+
+def _init_sync(tmp_path: Path) -> None:
+    (tmp_path / "app.py").write_text("x = 1\n")
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["walk", "--root", str(tmp_path)])
+    runner.invoke(app, ["sync", "--root", str(tmp_path)])
+
+
+def test_query_returns_results(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(
+        app, ["query", "SELECT path, language FROM items", "--root", str(tmp_path)]
+    )
+    assert result.exit_code == 0
+    assert "path" in result.output
+    assert "language" in result.output
+    assert "app.py" in result.output
+
+
+def test_query_no_results(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(
+        app, ["query", "SELECT path FROM items WHERE 1=0", "--root", str(tmp_path)]
+    )
+    assert result.exit_code == 0
+    assert "no results" in result.output
+
+
+def test_query_sql_error(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(
+        app, ["query", "SELECT * FROM nonexistent_table", "--root", str(tmp_path)]
+    )
+    assert result.exit_code != 0
+
+
+def test_query_no_index(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["query", "SELECT 1", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_overview_runs(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["overview", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "layer" in result.output
+
+
+def test_domain_no_results_before_enrich(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["domain", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "no results" in result.output
+
+
+def test_effects_no_results_before_enrich(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["effects", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "no results" in result.output
+
+
+def test_tags_no_results_before_enrich(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["tags", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "no results" in result.output
+
+
+def test_unstable_no_results_before_enrich(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["unstable", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "no results" in result.output

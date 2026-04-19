@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sqlite3
+import time
 from pathlib import Path
 
 import typer
@@ -95,13 +97,16 @@ def enrich(
         symbol = "✓" if success else "✗"
         typer.echo(f"  {symbol} {path}")
 
+    started = time.perf_counter()
     enrich_result = run_enrich(project_root, repo, client, batch_limit=limit, on_progress=_progress)
+    elapsed = time.perf_counter() - started
     if isinstance(enrich_result, Left):
         typer.echo(f"Error: {enrich_result.error}", err=True)
         raise typer.Exit(1)
     report = enrich_result.value
     typer.echo(
         f"Enrich: enriched={report.enriched} failed={report.failed} skipped={report.skipped}"
+        f" elapsed={elapsed:.1f}s"
     )
     for error in report.errors:
         typer.echo(f"  ! {error}", err=True)
@@ -202,3 +207,86 @@ def stale(root: str | None = typer.Option(None, help="Project root")) -> None:
         return
     for item in stale_items:
         typer.echo(f"{item.path}\t(content changed since last enrich)")
+
+
+_SQL_OVERVIEW = (
+    "SELECT layer, language, COUNT(*) AS total FROM items "
+    "WHERE deleted_at IS NULL GROUP BY layer, language ORDER BY layer, total DESC"
+)
+_SQL_DOMAIN = (
+    "SELECT path, purpose FROM items WHERE layer = 'domain' AND needs_llm = 0 ORDER BY path"
+)
+_SQL_EFFECTS = (
+    "SELECT i.path, s.effect FROM items i "
+    "JOIN side_effects s ON s.item_id = i.id "
+    "WHERE s.effect IN ('network', 'git') ORDER BY i.path"
+)
+_SQL_TAGS = (
+    "SELECT t.tag, COUNT(*) AS total FROM tags t "
+    "JOIN items i ON i.id = t.item_id "
+    "WHERE i.deleted_at IS NULL GROUP BY t.tag ORDER BY total DESC LIMIT 30"
+)
+_SQL_UNSTABLE = (
+    "SELECT path, layer, stability, purpose FROM items "
+    "WHERE stability IN ('experimental', 'deprecated') "
+    "AND deleted_at IS NULL ORDER BY stability, path"
+)
+
+
+def _run_query(db_file: Path, sql: str) -> None:
+    if not db_file.exists():
+        typer.echo("Error: index not found. Run 'sourcemap init' first.", err=True)
+        raise typer.Exit(1)
+    conn = sqlite3.connect(str(db_file))
+    conn.row_factory = sqlite3.Row
+    try:
+        cursor = conn.execute(sql)  # noqa: S608
+        rows = cursor.fetchall()
+        if not rows:
+            typer.echo("(no results)")
+            return
+        headers = list(rows[0].keys())
+        widths = [max(len(h), max(len(str(r[h])) for r in rows)) for h in headers]
+        typer.echo("  ".join(h.ljust(w) for h, w in zip(headers, widths, strict=True)))
+        typer.echo("  ".join("-" * w for w in widths))
+        for row in rows:
+            cells = (str(row[h]).ljust(w) for h, w in zip(headers, widths, strict=True))
+            typer.echo("  ".join(cells))
+    except sqlite3.Error as error:
+        typer.echo(f"Error: {error}", err=True)
+        raise typer.Exit(1) from None
+    finally:
+        conn.close()
+
+
+@app.command()
+def query(
+    sql: str = typer.Argument(help="SQL query to run against the index"),
+    root: str | None = typer.Option(None, help="Project root"),
+) -> None:
+    _run_query(db_path(_resolve_root(root)), sql)
+
+
+@app.command()
+def overview(root: str | None = typer.Option(None, help="Project root")) -> None:
+    _run_query(db_path(_resolve_root(root)), _SQL_OVERVIEW)
+
+
+@app.command()
+def domain(root: str | None = typer.Option(None, help="Project root")) -> None:
+    _run_query(db_path(_resolve_root(root)), _SQL_DOMAIN)
+
+
+@app.command()
+def effects(root: str | None = typer.Option(None, help="Project root")) -> None:
+    _run_query(db_path(_resolve_root(root)), _SQL_EFFECTS)
+
+
+@app.command()
+def tags(root: str | None = typer.Option(None, help="Project root")) -> None:
+    _run_query(db_path(_resolve_root(root)), _SQL_TAGS)
+
+
+@app.command()
+def unstable(root: str | None = typer.Option(None, help="Project root")) -> None:
+    _run_query(db_path(_resolve_root(root)), _SQL_UNSTABLE)
