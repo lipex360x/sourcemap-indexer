@@ -128,11 +128,13 @@ def enrich(
         raise typer.Exit(1)
     report = enrich_result.value
     typer.echo(
-        f"Enrich: enriched={report.enriched} failed={report.failed} skipped={report.skipped}"
+        f"\nEnrich: enriched={report.enriched} failed={report.failed} skipped={report.skipped}"
         f" elapsed={elapsed:.1f}s"
     )
     for error in report.errors:
         typer.echo(f"  ! {error}", err=True)
+    typer.echo("")
+    stats(root=root)
 
 
 @app.command(help="Search enriched files by tag, layer, or language.")
