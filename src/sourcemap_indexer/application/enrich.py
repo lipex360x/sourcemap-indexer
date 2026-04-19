@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -30,6 +31,7 @@ def run_enrich(
     repository: ItemRepository,
     client: _EnrichClient,
     batch_limit: int | None = None,
+    on_progress: Callable[[str, bool], None] | None = None,
 ) -> Either[str, EnrichReport]:
     items_result = repository.find_needs_llm(limit=batch_limit)
     if isinstance(items_result, Left):
@@ -53,6 +55,8 @@ def run_enrich(
         if isinstance(enrich_result, Left):
             failed += 1
             errors.append(f"{enrich_result.error}: {item.path}")
+            if on_progress:
+                on_progress(item.path, False)
             continue
 
         result_data = enrich_result.value
@@ -69,7 +73,11 @@ def run_enrich(
         if isinstance(upsert_result, Left):
             failed += 1
             errors.append(f"{upsert_result.error}: {item.path}")
+            if on_progress:
+                on_progress(item.path, False)
             continue
         enriched += 1
+        if on_progress:
+            on_progress(item.path, True)
 
     return right(EnrichReport(enriched=enriched, failed=failed, skipped=0, errors=tuple(errors)))

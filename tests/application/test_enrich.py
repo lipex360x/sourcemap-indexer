@@ -168,3 +168,27 @@ def test_enrich_report_fields() -> None:
     assert report.failed == 2
     assert report.skipped == 0
     assert report.errors == ("e1",)
+
+
+def test_on_progress_callback_called_per_file(tmp_path: Path) -> None:
+    repo = _make_repo()
+    for i in range(3):
+        item = _make_item(f"file{i}.py", tmp_path)
+        (tmp_path / f"file{i}.py").write_text("x = 1\n")
+        repo.upsert(item)
+    calls: list[tuple[str, bool]] = []
+    client = _stub(right(_VALID_RESULT))
+    run_enrich(tmp_path, repo, client, on_progress=lambda p, ok: calls.append((p, ok)))  # type: ignore[arg-type]
+    assert len(calls) == 3
+    assert all(ok for _, ok in calls)
+
+
+def test_on_progress_callback_reports_failure(tmp_path: Path) -> None:
+    repo = _make_repo()
+    item = _make_item("app.py", tmp_path)
+    (tmp_path / "app.py").write_text("x = 1\n")
+    repo.upsert(item)
+    calls: list[tuple[str, bool]] = []
+    client = _stub(left("llm-timeout"))
+    run_enrich(tmp_path, repo, client, on_progress=lambda p, ok: calls.append((p, ok)))  # type: ignore[arg-type]
+    assert calls == [("app.py", False)]

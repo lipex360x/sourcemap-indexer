@@ -90,7 +90,12 @@ def enrich(
     repo = _open_repo(project_root)
     config = from_environ()
     client = LlamaClient(config)
-    enrich_result = run_enrich(project_root, repo, client, batch_limit=limit)
+
+    def _progress(path: str, success: bool) -> None:
+        symbol = "✓" if success else "✗"
+        typer.echo(f"  {symbol} {path}")
+
+    enrich_result = run_enrich(project_root, repo, client, batch_limit=limit, on_progress=_progress)
     if isinstance(enrich_result, Left):
         typer.echo(f"Error: {enrich_result.error}", err=True)
         raise typer.Exit(1)
