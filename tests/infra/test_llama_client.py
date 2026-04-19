@@ -42,6 +42,42 @@ def test_llm_config_defaults() -> None:
     assert config.max_tokens == 800
     assert config.timeout_seconds == 60.0
     assert config.max_chars == 8000
+    assert config.api_key == ""
+
+
+def test_from_environ_reads_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_API_KEY", "test-secret-key")
+    config = from_environ()
+    assert config.api_key == "test-secret-key"
+
+
+def test_client_sends_auth_header_when_api_key_set() -> None:
+    captured: list[str] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        captured.append(request.headers.get("authorization", ""))
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(capture)
+    http_client = httpx.Client(transport=transport)
+    config = LlmConfig(api_key="my-key")
+    client = LlamaClient(config, http_client=http_client)
+    client.enrich("src/f.py", Language.PY, "code")
+    assert captured[0] == "Bearer my-key"
+
+
+def test_client_sends_no_auth_header_when_api_key_empty() -> None:
+    captured: list[str] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        captured.append(request.headers.get("authorization", ""))
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(capture)
+    http_client = httpx.Client(transport=transport)
+    client = LlamaClient(LlmConfig(), http_client=http_client)
+    client.enrich("src/f.py", Language.PY, "code")
+    assert captured[0] == ""
 
 
 def test_content_is_truncated_when_exceeds_max_chars() -> None:

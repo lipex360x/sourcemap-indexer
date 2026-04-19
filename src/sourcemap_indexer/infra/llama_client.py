@@ -39,6 +39,7 @@ class LlmConfig:
     max_tokens: int = 800
     timeout_seconds: float = 60.0
     max_chars: int = 8000
+    api_key: str = ""
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ def from_environ() -> LlmConfig:
     return LlmConfig(
         url=os.environ.get("SOURCEMAP_LLM_URL", LlmConfig.url),
         model=os.environ.get("SOURCEMAP_LLM_MODEL", LlmConfig.model),
+        api_key=os.environ.get("SOURCEMAP_LLM_API_KEY", LlmConfig.api_key),
     )
 
 
@@ -105,10 +107,15 @@ class LlamaClient:
         self._config = config
         self._http = http_client or httpx.Client(timeout=config.timeout_seconds)
 
+    def _auth_headers(self) -> dict[str, str]:
+        if self._config.api_key:
+            return {"Authorization": f"Bearer {self._config.api_key}"}
+        return {}
+
     def ping(self) -> Either[str, None]:
         base = self._config.url.split("/v1/")[0]
         try:
-            self._http.get(f"{base}/v1/models", timeout=5.0)
+            self._http.get(f"{base}/v1/models", timeout=5.0, headers=self._auth_headers())
         except httpx.RequestError as error:
             return left(f"llm-unreachable: {error}")
         return right(None)
@@ -127,7 +134,7 @@ class LlamaClient:
             "max_tokens": self._config.max_tokens,
         }
         try:
-            response = self._http.post(self._config.url, json=body)
+            response = self._http.post(self._config.url, json=body, headers=self._auth_headers())
         except httpx.TimeoutException:
             return left("llm-timeout")
         except httpx.RequestError as error:
