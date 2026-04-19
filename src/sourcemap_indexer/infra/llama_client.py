@@ -105,6 +105,14 @@ class LlamaClient:
         self._config = config
         self._http = http_client or httpx.Client(timeout=config.timeout_seconds)
 
+    def ping(self) -> Either[str, None]:
+        base = self._config.url.split("/v1/")[0]
+        try:
+            self._http.get(f"{base}/v1/models", timeout=5.0)
+        except httpx.RequestError as error:
+            return left(f"llm-unreachable: {error}")
+        return right(None)
+
     def enrich(self, path: str, language: Language, content: str) -> Either[str, EnrichmentResult]:
         if len(content) > self._config.max_chars:
             content = content[: self._config.max_chars]

@@ -93,6 +93,11 @@ def enrich(
     repo = _open_repo(project_root)
     config = from_environ()
     client = LlamaClient(config)
+    ping_result = client.ping()
+    if isinstance(ping_result, Left):
+        typer.echo(f"Error: LLM unreachable — {ping_result.error}", err=True)
+        typer.echo(f"  Check that your LLM server is running at: {config.url}", err=True)
+        raise typer.Exit(1)
 
     def _progress(path: str, success: bool) -> None:
         symbol = "✓" if success else "✗"

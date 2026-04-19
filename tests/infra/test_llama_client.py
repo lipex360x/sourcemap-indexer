@@ -205,3 +205,31 @@ def test_enrichment_result_has_expected_fields() -> None:
     assert isinstance(enrichment.tags, frozenset)
     assert isinstance(enrichment.side_effects, frozenset)
     assert isinstance(enrichment.invariants, tuple)
+
+
+def test_ping_returns_right_when_server_responds() -> None:
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, text="[]"))
+    http_client = httpx.Client(transport=transport)
+    client = LlamaClient(LlmConfig(), http_client=http_client)
+    result = client.ping()
+    assert isinstance(result, Right)
+
+
+def test_ping_returns_left_on_connect_error() -> None:
+    def raise_connect(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    transport = httpx.MockTransport(raise_connect)
+    http_client = httpx.Client(transport=transport)
+    client = LlamaClient(LlmConfig(), http_client=http_client)
+    result = client.ping()
+    assert isinstance(result, Left)
+    assert "llm-unreachable" in result.error
+
+
+def test_ping_returns_right_on_any_http_status() -> None:
+    transport = httpx.MockTransport(lambda request: httpx.Response(404, text="not found"))
+    http_client = httpx.Client(transport=transport)
+    client = LlamaClient(LlmConfig(), http_client=http_client)
+    result = client.ping()
+    assert isinstance(result, Right)
