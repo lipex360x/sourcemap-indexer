@@ -60,8 +60,12 @@ def walk_project(root: Path) -> Either[str, list[WalkedFile]]:
         return spec_result
     spec = spec_result.value
 
+    try:
+        all_paths = sorted(root.rglob("*"))
+    except PermissionError as error:
+        return left(f"walk-error: {error}")
     walked: list[WalkedFile] = []
-    for file_path in sorted(root.rglob("*")):
+    for file_path in all_paths:
         if not file_path.is_file():
             continue
         if file_path.is_symlink():
