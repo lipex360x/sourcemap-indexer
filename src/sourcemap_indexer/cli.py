@@ -111,9 +111,14 @@ def enrich(
         typer.echo(f"  Check that your LLM server is running at: {config.url}", err=True)
         raise typer.Exit(1)
 
-    def _progress(path: str, success: bool) -> None:
+    def _progress(path: str, success: bool, current: int, total: int) -> None:
+        bar_width = 20
+        filled = round(current / total * bar_width) if total else 0
+        bar = "█" * filled + "░" * (bar_width - filled)
+        pct = round(current / total * 100) if total else 0
+        pad = len(str(total))
         symbol = "✓" if success else "✗"
-        typer.echo(f"  {symbol} {path}")
+        typer.echo(f"  [{current:>{pad}}/{total}] [{bar}] {pct:>3}%  {symbol} {path}")
 
     started = time.perf_counter()
     enrich_result = run_enrich(project_root, repo, client, batch_limit=limit, on_progress=_progress)

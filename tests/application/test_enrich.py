@@ -176,11 +176,17 @@ def test_on_progress_callback_called_per_file(tmp_path: Path) -> None:
         item = _make_item(f"file{i}.py", tmp_path)
         (tmp_path / f"file{i}.py").write_text("x = 1\n")
         repo.upsert(item)
-    calls: list[tuple[str, bool]] = []
+    calls: list[tuple[str, bool, int, int]] = []
+
+    def _cb(path: str, success: bool, cur: int, tot: int) -> None:
+        calls.append((path, success, cur, tot))
+
     client = _stub(right(_VALID_RESULT))
-    run_enrich(tmp_path, repo, client, on_progress=lambda p, ok: calls.append((p, ok)))  # type: ignore[arg-type]
+    run_enrich(tmp_path, repo, client, on_progress=_cb)  # type: ignore[arg-type]
     assert len(calls) == 3
-    assert all(ok for _, ok in calls)
+    assert all(success for _, success, _, _ in calls)
+    assert [cur for _, _, cur, _ in calls] == [1, 2, 3]
+    assert all(tot == 3 for _, _, _, tot in calls)
 
 
 def test_on_progress_callback_reports_failure(tmp_path: Path) -> None:
@@ -188,7 +194,11 @@ def test_on_progress_callback_reports_failure(tmp_path: Path) -> None:
     item = _make_item("app.py", tmp_path)
     (tmp_path / "app.py").write_text("x = 1\n")
     repo.upsert(item)
-    calls: list[tuple[str, bool]] = []
+    calls: list[tuple[str, bool, int, int]] = []
+
+    def _cb(path: str, success: bool, cur: int, tot: int) -> None:
+        calls.append((path, success, cur, tot))
+
     client = _stub(left("llm-timeout"))
-    run_enrich(tmp_path, repo, client, on_progress=lambda p, ok: calls.append((p, ok)))  # type: ignore[arg-type]
-    assert calls == [("app.py", False)]
+    run_enrich(tmp_path, repo, client, on_progress=_cb)  # type: ignore[arg-type]
+    assert calls == [("app.py", False, 1, 1)]

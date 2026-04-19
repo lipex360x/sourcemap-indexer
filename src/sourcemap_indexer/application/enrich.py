@@ -31,32 +31,39 @@ def run_enrich(
     repository: ItemRepository,
     client: _EnrichClient,
     batch_limit: int | None = None,
-    on_progress: Callable[[str, bool], None] | None = None,
+    on_progress: Callable[[str, bool, int, int], None] | None = None,
 ) -> Either[str, EnrichReport]:
     items_result = repository.find_needs_llm(limit=batch_limit)
     if isinstance(items_result, Left):
         return items_result
 
+    pending = items_result.value
+    total_items = len(pending)
     enriched = 0
     failed = 0
     errors: list[str] = []
     now = int(time.time())
+    done = 0
 
-    for item in items_result.value:
+    for item in pending:
         file_path = root / item.path
         try:
             content = file_path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             failed += 1
+            done += 1
             errors.append(f"read-error: {item.path}")
+            if on_progress:
+                on_progress(item.path, False, done, total_items)
             continue
 
         enrich_result = client.enrich(item.path, item.language, content)
         if isinstance(enrich_result, Left):
             failed += 1
+            done += 1
             errors.append(f"{enrich_result.error}: {item.path}")
             if on_progress:
-                on_progress(item.path, False)
+                on_progress(item.path, False, done, total_items)
             continue
 
         result_data = enrich_result.value
@@ -72,12 +79,14 @@ def run_enrich(
         upsert_result = repository.upsert(updated)
         if isinstance(upsert_result, Left):
             failed += 1
+            done += 1
             errors.append(f"{upsert_result.error}: {item.path}")
             if on_progress:
-                on_progress(item.path, False)
+                on_progress(item.path, False, done, total_items)
             continue
         enriched += 1
+        done += 1
         if on_progress:
-            on_progress(item.path, True)
+            on_progress(item.path, True, done, total_items)
 
     return right(EnrichReport(enriched=enriched, failed=failed, skipped=0, errors=tuple(errors)))
