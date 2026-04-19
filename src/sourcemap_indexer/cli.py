@@ -252,7 +252,7 @@ def reset(root: str | None = typer.Option(None, help="Project root")) -> None:
         db_file.unlink()
     if index_yaml.exists():
         index_yaml.unlink()
-    typer.echo("Reset complete. Run: sourcemap init && sourcemap walk && sourcemap sync")
+    typer.echo("Reset complete. Run: sourcemap init && sourcemap walk")
 
 
 @app.command(help="Restore index.db from a previously saved .bak file.")
