@@ -56,6 +56,7 @@ sourcemap stats   # overview: total, enriched, pending
 |---------|-------------|
 | `sourcemap reset` | Delete the index (offers a timestamped backup before wiping) |
 | `sourcemap restore` | Restore `index.db` from a previously saved `.bak` file |
+| `sourcemap install-skill --target <dir>` | Copy the skill file to your AI assistant's skills directory |
 
 ## Environment variables
 
@@ -85,6 +86,18 @@ The enrichment client targets any OpenAI-compatible endpoint:
 export SOURCEMAP_LLM_URL=https://api.openai.com/v1/chat/completions
 export SOURCEMAP_LLM_MODEL=gpt-4o
 sourcemap enrich --limit 10
+```
+
+## AI assistant skill
+
+Install the bundled skill file so your AI assistant can query the index directly:
+
+```bash
+# Claude Code
+sourcemap install-skill --target ~/.claude/skills
+
+# Any other tool — point to its skills directory
+sourcemap install-skill --target <your-tool-skills-dir>
 ```
 
 ## Post-commit hook (auto-walk on every commit)

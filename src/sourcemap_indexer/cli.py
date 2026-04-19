@@ -4,6 +4,7 @@ import shutil
 import sqlite3
 import time
 from datetime import datetime
+from importlib.resources import files
 from pathlib import Path
 
 import typer
@@ -275,6 +276,21 @@ def restore(root: str | None = typer.Option(None, help="Project root")) -> None:
     selected = backups[choice - 1]
     shutil.copy2(selected, db_path(project_root))
     typer.echo(f"Restored from {selected.name}")
+
+
+_INSTALL_SKILL_HELP = "Install the skill file into an AI assistant's skills directory."
+
+
+@app.command(name="install-skill", help=_INSTALL_SKILL_HELP)
+def install_skill(
+    target: str = typer.Option(..., "--target", help="Skills directory (e.g. ~/.claude/skills)"),
+) -> None:
+    skill_src = files("sourcemap_indexer.skill").joinpath("SKILL.md")
+    dest_dir = Path(target).expanduser() / "sourcemap"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / "SKILL.md"
+    dest.write_text(skill_src.read_text(encoding="utf-8"), encoding="utf-8")
+    typer.echo(f"Skill installed at {dest}")
 
 
 _SQL_OVERVIEW = (

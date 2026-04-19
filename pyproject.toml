@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "sourcemap-indexer"
 version = "0.1.0"
-description = "Indexador de codebase em SQLite enriquecido por LLM local"
+description = "Codebase indexer: walks files into SQLite and enriches metadata via any LLM"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -35,6 +35,11 @@ sourcemap = "sourcemap_indexer.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sourcemap_indexer"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+
+[tool.hatch.build]
+include = ["src/sourcemap_indexer/**"]
 
 [tool.ruff]
 line-length = 100

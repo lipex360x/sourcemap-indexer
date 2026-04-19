@@ -338,3 +338,12 @@ def test_restore_invalid_selection_exits(tmp_path: Path) -> None:
     bak.write_bytes(b"fake")
     result = runner.invoke(app, ["restore", "--root", str(tmp_path)], input="99\n")
     assert result.exit_code != 0
+
+
+def test_install_skill_creates_file(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["install-skill", "--target", str(tmp_path)])
+    assert result.exit_code == 0
+    skill = tmp_path / "sourcemap" / "SKILL.md"
+    assert skill.exists()
+    assert "sourcemap" in skill.read_text()
+    assert "Skill installed" in result.output
