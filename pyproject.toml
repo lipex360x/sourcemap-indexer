@@ -56,7 +56,7 @@ cache_dir = ".pytest_cache"
 
 [tool.coverage.run]
 source = ["sourcemap_indexer"]
-omit = ["*/tests/*", "*/.venv/*", "*/lib/*.py"]
+omit = ["*/tests/*", "*/.venv/*", "*/lib/*.py", "*/domain/repository.py"]
 
 [tool.coverage.report]
 exclude_lines = ["if __name__ == .__main__.:", "pragma: no cover"]

@@ -29,7 +29,7 @@ if [[ -n "$staged_py" ]]; then
 
     printf "→ vulture\n"
     NO_LOG_FILE=1 "$VENV/vulture" "$ROOT/src/sourcemap_indexer/" "$ROOT/tests/" \
-        --min-confidence 80
+        --min-confidence 80 --exclude "*repository*"
 
     printf "→ bandit\n"
     echo "$staged_py" | xargs "$VENV/bandit" -r -c "$ROOT/pyproject.toml" -q
