@@ -258,3 +258,25 @@ def test_unstable_no_results_before_enrich(tmp_path: Path) -> None:
     result = runner.invoke(app, ["unstable", "--root", str(tmp_path)])
     assert result.exit_code == 0
     assert "no results" in result.output
+
+
+def test_reset_confirmed_deletes_maps(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    assert (tmp_path / ".docs" / "maps").exists()
+    result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\n")
+    assert result.exit_code == 0
+    assert not (tmp_path / ".docs" / "maps").exists()
+    assert "irreversível" in result.output
+
+
+def test_reset_aborted_keeps_maps(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="n\n")
+    assert result.exit_code == 0
+    assert (tmp_path / ".docs" / "maps").exists()
+    assert "Cancelado" in result.output
+
+
+def test_reset_no_index_exits(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\n")
+    assert result.exit_code != 0

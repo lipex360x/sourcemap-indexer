@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import sqlite3
 import time
 from pathlib import Path
@@ -207,6 +208,24 @@ def stale(root: str | None = typer.Option(None, help="Project root")) -> None:
         return
     for item in stale_items:
         typer.echo(f"{item.path}\t(content changed since last enrich)")
+
+
+@app.command()
+def reset(root: str | None = typer.Option(None, help="Project root")) -> None:
+    project_root = _resolve_root(root)
+    maps_dir = project_root / ".docs" / "maps"
+    if not maps_dir.exists():
+        typer.echo("Error: index not found. Nothing to reset.", err=True)
+        raise typer.Exit(1)
+    typer.echo(
+        "ATENÇÃO: esta operação é irreversível. "
+        "O índice será deletado e precisará ser refeito com init + walk + sync + enrich."
+    )
+    if not typer.confirm("Confirma o reset?"):
+        typer.echo("Cancelado.")
+        return
+    shutil.rmtree(maps_dir)
+    typer.echo("Reset concluído. Execute: sourcemap init && sourcemap walk && sourcemap sync")
 
 
 _SQL_OVERVIEW = (
