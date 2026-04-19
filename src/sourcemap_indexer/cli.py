@@ -181,6 +181,11 @@ def show(
     typer.echo(f"size:      {item.size_bytes} bytes")
 
 
+def _bar(value: int, maximum: int, width: int = 18) -> str:
+    filled = round(value / maximum * width) if maximum else 0
+    return "█" * filled + "░" * (width - filled)
+
+
 @app.command(help="Show total, enriched, and pending counts broken down by layer and language.")
 def stats(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
@@ -198,13 +203,30 @@ def stats(root: str | None = typer.Option(None, help="Project root")) -> None:
     for item in items:
         by_layer[str(item.layer)] = by_layer.get(str(item.layer), 0) + 1
         by_lang[str(item.language)] = by_lang.get(str(item.language), 0) + 1
-    typer.echo(f"Total: {total}  Enriched: {enriched}  Pending: {pending}")
-    typer.echo("By layer:")
-    for layer_name, count in sorted(by_layer.items()):
-        typer.echo(f"  {layer_name}: {count}")
-    typer.echo("By language:")
-    for lang, count in sorted(by_lang.items()):
-        typer.echo(f"  {lang}: {count}")
+
+    sep = "━" * 52
+    pct = round(enriched / total * 100) if total else 0
+    prog_filled = round(pct / 100 * 20)
+    progress = "█" * prog_filled + "░" * (20 - prog_filled)
+
+    typer.echo(sep)
+    typer.echo(f"  Total: {total:<6}  Enriched: {enriched:<6}  Pending: {pending}")
+    typer.echo(f"  [{progress}] {pct}%")
+    typer.echo("")
+
+    col = max((len(k) for k in by_layer), default=0)
+    top = max(by_layer.values(), default=1)
+    typer.echo("  By layer")
+    for name, cnt in sorted(by_layer.items(), key=lambda x: -x[1]):
+        typer.echo(f"  {name:<{col}}  {cnt:>5}  {_bar(cnt, top)}")
+    typer.echo("")
+
+    col = max((len(k) for k in by_lang), default=0)
+    top = max(by_lang.values(), default=1)
+    typer.echo("  By language")
+    for lang, cnt in sorted(by_lang.items(), key=lambda x: -x[1]):
+        typer.echo(f"  {lang:<{col}}  {cnt:>5}  {_bar(cnt, top)}")
+    typer.echo(sep)
 
 
 @app.command(help="List files whose content changed since the last enrich run.")
