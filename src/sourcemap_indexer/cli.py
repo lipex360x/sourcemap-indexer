@@ -29,6 +29,10 @@ _APP_HELP = (
 app = typer.Typer(help=_APP_HELP)
 
 _DEFAULT_SOURCEMAPIGNORE = ".venv/\n.git/\n__pycache__/\n*.pyc\ndist/\nbuild/\n*.db\n*.sqlite\n"
+_LAYER_VALUES = "domain|infra|application|cli|hook|lib|config|doc|test|unknown"
+_LANG_VALUES = "py|sh|ts|tsx|js|sql|md|yaml|json|toml|other"
+_LAYER_HELP = f"Filter by layer: {_LAYER_VALUES}"
+_LANG_HELP = f"Filter by language: {_LANG_VALUES}"
 
 
 def _resolve_root(root: str | None) -> Path:
@@ -149,9 +153,9 @@ def enrich(
 @app.command(help="Search enriched files by tag, layer, or language.")
 def find(
     root: str | None = typer.Option(None, help="Project root"),
-    tag: str | None = typer.Option(None, "--tag", help="Filter by tag"),
-    layer: str | None = typer.Option(None, "--layer", help="Filter by layer"),
-    language: str | None = typer.Option(None, "--language", help="Filter by language"),
+    tag: str | None = typer.Option(None, "--tag", help="Filter by tag (free text)"),
+    layer: str | None = typer.Option(None, "--layer", help=_LAYER_HELP),
+    language: str | None = typer.Option(None, "--language", help=_LANG_HELP),
 ) -> None:
     project_root = _resolve_root(root)
     repo = _open_repo(project_root)
