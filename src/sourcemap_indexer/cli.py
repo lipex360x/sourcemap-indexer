@@ -33,6 +33,7 @@ _LAYER_VALUES = "domain|infra|application|cli|hook|lib|config|doc|test|unknown"
 _LANG_VALUES = "py|sh|ts|tsx|js|sql|md|yaml|json|toml|other"
 _LAYER_HELP = f"Filter by layer: {_LAYER_VALUES}"
 _LANG_HELP = f"Filter by language: {_LANG_VALUES}"
+_FIND_HELP = f"Search files by --tag TEXT, --layer ({_LAYER_VALUES}), --language ({_LANG_VALUES})."
 
 
 def _resolve_root(root: str | None) -> Path:
@@ -107,7 +108,10 @@ def sync(root: str | None = typer.Option(None, help="Project root")) -> None:
     )
 
 
-@app.command(help="Send pending files to the LLM and store purpose, tags, layer, and side effects.")
+_ENRICH_HELP = "Enrich pending files via LLM. Use --limit N to cap. Stores purpose, tags, layer."
+
+
+@app.command(help=_ENRICH_HELP)
 def enrich(
     root: str | None = typer.Option(None, help="Project root"),
     limit: int | None = typer.Option(None, "--limit", help="Max items to enrich"),
@@ -150,7 +154,7 @@ def enrich(
     stats(root=root)
 
 
-@app.command(help="Search enriched files by tag, layer, or language.")
+@app.command(help=_FIND_HELP)
 def find(
     root: str | None = typer.Option(None, help="Project root"),
     tag: str | None = typer.Option(None, "--tag", help="Filter by tag (free text)"),
