@@ -16,12 +16,12 @@ runner = CliRunner()
 def test_init_creates_maps_directory(tmp_path: Path) -> None:
     result = runner.invoke(app, ["init", "--root", str(tmp_path)])
     assert result.exit_code == 0
-    assert (tmp_path / ".docs" / "maps").is_dir()
+    assert (tmp_path / ".sourcemap").is_dir()
 
 
 def test_init_creates_db_file(tmp_path: Path) -> None:
     runner.invoke(app, ["init", "--root", str(tmp_path)])
-    assert (tmp_path / ".docs" / "maps" / "index.db").exists()
+    assert (tmp_path / ".sourcemap" / "index.db").exists()
 
 
 def test_init_creates_sourcemapignore(tmp_path: Path) -> None:
@@ -30,7 +30,7 @@ def test_init_creates_sourcemapignore(tmp_path: Path) -> None:
 
 
 def test_init_db_error_exits(tmp_path: Path) -> None:
-    maps_dir = tmp_path / ".docs" / "maps"
+    maps_dir = tmp_path / ".sourcemap"
     maps_dir.mkdir(parents=True)
     maps_dir.chmod(0o000)
     result = runner.invoke(app, ["init", "--root", str(tmp_path)])
@@ -43,7 +43,7 @@ def test_walk_generates_yaml(tmp_path: Path) -> None:
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     result = runner.invoke(app, ["walk", "--root", str(tmp_path)])
     assert result.exit_code == 0
-    index = tmp_path / ".docs" / "maps" / "index.yaml"
+    index = tmp_path / ".sourcemap" / "index.yaml"
     assert index.exists()
     data = yaml.safe_load(index.read_text())
     assert len(data["files"]) >= 1
@@ -353,7 +353,7 @@ def test_stats_by_language_shows_filled_bar_for_enriched_small_language(
     (tmp_path / "README.md").write_text("# readme\n")
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     runner.invoke(app, ["walk", "--root", str(tmp_path)])
-    db_file = tmp_path / ".docs" / "maps" / "index.db"
+    db_file = tmp_path / ".sourcemap" / "index.db"
     conn = sqlite3.connect(str(db_file))
     conn.execute("UPDATE items SET needs_llm = 0, llm_hash = content_hash WHERE language = 'md'")
     conn.commit()
@@ -379,7 +379,7 @@ def test_stale_with_modified_items(tmp_path: Path) -> None:
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     runner.invoke(app, ["walk", "--root", str(tmp_path)])
     runner.invoke(app, ["sync", "--root", str(tmp_path)])
-    db_path = tmp_path / ".docs" / "maps" / "index.db"
+    db_path = tmp_path / ".sourcemap" / "index.db"
     conn = sqlite3.connect(str(db_path))
     fake_hash = "a" * 64
     conn.execute("UPDATE items SET llm_hash = ? WHERE path = 'app.py'", (fake_hash,))
@@ -568,7 +568,7 @@ def test_profile_fails_without_index(tmp_path: Path) -> None:
 
 def test_reset_confirmed_deletes_db(tmp_path: Path) -> None:
     _init_sync(tmp_path)
-    db_file = tmp_path / ".docs" / "maps" / "index.db"
+    db_file = tmp_path / ".sourcemap" / "index.db"
     assert db_file.exists()
     result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\nn\n")
     assert result.exit_code == 0
@@ -578,7 +578,7 @@ def test_reset_confirmed_deletes_db(tmp_path: Path) -> None:
 
 def test_reset_with_backup_creates_bak_file(tmp_path: Path) -> None:
     _init_sync(tmp_path)
-    maps_dir = tmp_path / ".docs" / "maps"
+    maps_dir = tmp_path / ".sourcemap"
     result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\ny\n")
     assert result.exit_code == 0
     bak_files = list(maps_dir.glob("index.*.bak"))
@@ -588,7 +588,7 @@ def test_reset_with_backup_creates_bak_file(tmp_path: Path) -> None:
 
 def test_reset_without_backup_no_bak_file(tmp_path: Path) -> None:
     _init_sync(tmp_path)
-    maps_dir = tmp_path / ".docs" / "maps"
+    maps_dir = tmp_path / ".sourcemap"
     runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\nn\n")
     assert not list(maps_dir.glob("index.*.bak"))
 
@@ -597,7 +597,7 @@ def test_reset_aborted_keeps_maps(tmp_path: Path) -> None:
     _init_sync(tmp_path)
     result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="n\n")
     assert result.exit_code == 0
-    assert (tmp_path / ".docs" / "maps").exists()
+    assert (tmp_path / ".sourcemap").exists()
     assert "Cancelled" in result.output
 
 
@@ -620,7 +620,7 @@ def test_restore_no_backups_found(tmp_path: Path) -> None:
 
 def test_restore_lists_and_restores_backup(tmp_path: Path) -> None:
     _init_sync(tmp_path)
-    maps_dir = tmp_path / ".docs" / "maps"
+    maps_dir = tmp_path / ".sourcemap"
     runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\ny\n")
     bak_files = list(maps_dir.glob("index.*.bak"))
     assert len(bak_files) == 1
@@ -632,7 +632,7 @@ def test_restore_lists_and_restores_backup(tmp_path: Path) -> None:
 
 def test_restore_invalid_selection_exits(tmp_path: Path) -> None:
     _init_sync(tmp_path)
-    maps_dir = tmp_path / ".docs" / "maps"
+    maps_dir = tmp_path / ".sourcemap"
     bak = maps_dir / "index.20240101_000000.bak"
     bak.write_bytes(b"fake")
     result = runner.invoke(app, ["restore", "--root", str(tmp_path)], input="99\n")
@@ -664,7 +664,7 @@ def test_enrich_export_llm_prompt_creates_default_md_file(
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     runner.invoke(app, ["enrich", "--root", str(tmp_path), "--export-llm-prompt"])
-    default_file = tmp_path / ".docs" / "maps" / "prompt.md"
+    default_file = tmp_path / ".sourcemap" / "prompt.md"
     assert default_file.exists()
     assert len(default_file.read_text()) > 0
 
@@ -677,7 +677,7 @@ def test_enrich_export_llm_prompt_content_matches_system_prompt(
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     runner.invoke(app, ["enrich", "--root", str(tmp_path), "--export-llm-prompt"])
-    default_file = tmp_path / ".docs" / "maps" / "prompt.md"
+    default_file = tmp_path / ".sourcemap" / "prompt.md"
     assert default_file.read_text(encoding="utf-8") == SYSTEM_PROMPT
 
 

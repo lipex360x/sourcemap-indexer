@@ -9,7 +9,7 @@ from sourcemap_indexer.application.sync import run_sync
 from sourcemap_indexer.application.walk import run_walk
 from sourcemap_indexer.cli._rendering import _panel
 from sourcemap_indexer.cli._shared import _open_repo, _resolve_root, app
-from sourcemap_indexer.config import config_dir, index_yaml_path
+from sourcemap_indexer.config import index_yaml_path
 from sourcemap_indexer.lib.either import Left
 
 
@@ -21,10 +21,7 @@ def walk(root: str | None = typer.Option(None, help="Project root")) -> None:
     console = _Console()
 
     walk_start = time.perf_counter()
-    cfg = config_dir(project_root)
-    walk_result = run_walk(
-        project_root, output, known_files=repo.load_known_files(), config_dir=cfg
-    )
+    walk_result = run_walk(project_root, output, known_files=repo.load_known_files())
     walk_elapsed = time.perf_counter() - walk_start
 
     if isinstance(walk_result, Left):

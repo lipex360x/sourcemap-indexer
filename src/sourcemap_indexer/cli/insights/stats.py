@@ -18,7 +18,7 @@ from sourcemap_indexer.cli._rendering import (
     _proportional_width,
 )
 from sourcemap_indexer.cli._shared import _open_repo, _resolve_root, app
-from sourcemap_indexer.config import config_dir, index_yaml_path
+from sourcemap_indexer.config import index_yaml_path
 from sourcemap_indexer.infra.dotenv import load_dotenv
 from sourcemap_indexer.infra.llm_client import from_environ, is_llm_configured
 from sourcemap_indexer.lib.either import Left
@@ -51,7 +51,7 @@ def stats(
         transient=True,
     ) as prog:
         task_scan = prog.add_task("Scanning files...", total=None)
-        walk_result = run_walk(project_root, output, config_dir=config_dir(project_root))
+        walk_result = run_walk(project_root, output)
         if isinstance(walk_result, Left):
             typer.echo(f"Error: {walk_result.error}", err=True)
             raise typer.Exit(1)

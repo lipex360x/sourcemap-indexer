@@ -3,7 +3,7 @@ from __future__ import annotations
 import typer
 
 from sourcemap_indexer.cli._shared import _DEFAULT_SOURCEMAPIGNORE, _resolve_root, app
-from sourcemap_indexer.config import config_dir, db_path, maps_dir
+from sourcemap_indexer.config import db_path, maps_dir
 from sourcemap_indexer.infra.migrator import init_db
 from sourcemap_indexer.lib.either import Left
 
@@ -34,10 +34,7 @@ def init(root: str | None = typer.Option(None, help="Project root")) -> None:
         typer.echo(f"Error: {result.error}", err=True)
         raise typer.Exit(1)
     result.value.close()
-    cfg_dir = config_dir(project_root)
-    cfg_dir.mkdir(parents=True, exist_ok=True)
-    layers_file = cfg_dir / "layers.yaml"
+    layers_file = output_dir / "layers.yaml"
     if not layers_file.exists():
         layers_file.write_text(_LAYERS_YAML_TEMPLATE, encoding="utf-8")
     typer.echo(f"Initialized sourcemap at {project_root}")
-    typer.echo(f"Config: {cfg_dir}")

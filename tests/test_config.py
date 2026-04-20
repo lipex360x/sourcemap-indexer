@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from sourcemap_indexer.config import (
-    config_dir,
     db_path,
     default_prompt_export_path,
     find_project_root,
@@ -43,7 +42,7 @@ def test_find_project_root_returns_left_when_no_git(tmp_path: Path) -> None:
 
 def test_maps_dir_returns_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SOURCEMAP_MAPS_DIR", raising=False)
-    assert maps_dir(tmp_path) == tmp_path / ".docs" / "maps"
+    assert maps_dir(tmp_path) == tmp_path / ".sourcemap"
 
 
 def test_maps_dir_relative_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -64,7 +63,7 @@ def test_db_path_uses_maps_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
 def test_db_path_returns_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SOURCEMAP_MAPS_DIR", raising=False)
-    assert db_path(tmp_path) == tmp_path / ".docs" / "maps" / "index.db"
+    assert db_path(tmp_path) == tmp_path / ".sourcemap" / "index.db"
 
 
 def test_index_yaml_path_uses_maps_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -74,14 +73,12 @@ def test_index_yaml_path_uses_maps_dir(tmp_path: Path, monkeypatch: pytest.Monke
 
 def test_index_yaml_path_returns_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SOURCEMAP_MAPS_DIR", raising=False)
-    assert index_yaml_path(tmp_path) == tmp_path / ".docs" / "maps" / "index.yaml"
+    assert index_yaml_path(tmp_path) == tmp_path / ".sourcemap" / "index.yaml"
 
 
-def test_logs_dir_default_is_sibling_of_maps(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_logs_dir_default_is_inside_maps(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SOURCEMAP_MAPS_DIR", raising=False)
-    assert logs_dir(tmp_path) == tmp_path / ".docs" / "logs"
+    assert logs_dir(tmp_path) == tmp_path / ".sourcemap" / "logs"
 
 
 def test_logs_dir_follows_custom_maps_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -123,7 +120,7 @@ def test_default_prompt_export_path_is_inside_maps_dir(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("SOURCEMAP_MAPS_DIR", raising=False)
-    assert default_prompt_export_path(tmp_path) == tmp_path / ".docs" / "maps" / "prompt.md"
+    assert default_prompt_export_path(tmp_path) == tmp_path / ".sourcemap" / "prompt.md"
 
 
 def test_default_prompt_export_path_follows_custom_maps_dir(
@@ -131,19 +128,3 @@ def test_default_prompt_export_path_follows_custom_maps_dir(
 ) -> None:
     monkeypatch.setenv("SOURCEMAP_MAPS_DIR", "out/maps")
     assert default_prompt_export_path(tmp_path) == tmp_path / "out" / "maps" / "prompt.md"
-
-
-def test_config_dir_returns_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("SOURCEMAP_CONFIG_DIR", raising=False)
-    assert config_dir(tmp_path) == tmp_path / ".sourcemap"
-
-
-def test_config_dir_relative_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SOURCEMAP_CONFIG_DIR", ".custom")
-    assert config_dir(tmp_path) == tmp_path / ".custom"
-
-
-def test_config_dir_absolute_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    abs_dir = tmp_path / "my" / "config"
-    monkeypatch.setenv("SOURCEMAP_CONFIG_DIR", str(abs_dir))
-    assert config_dir(tmp_path) == abs_dir

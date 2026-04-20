@@ -364,14 +364,14 @@ def test_load_ignore_uses_config_dir_ignore_when_present(tmp_path: Path) -> None
     config = tmp_path / ".sourcemap"
     config.mkdir()
     (config / "ignore").write_text("private/\n")
-    result = load_ignore_patterns(tmp_path, config_dir=config)
+    result = load_ignore_patterns(tmp_path, sourcemap_dir=config)
     assert isinstance(result, Right)
     assert result.value.match_file("private/secret.txt")
 
 
 def test_load_ignore_falls_back_to_root_sourcemapignore(tmp_path: Path) -> None:
     (tmp_path / ".sourcemapignore").write_text("legacy/\n")
-    result = load_ignore_patterns(tmp_path, config_dir=tmp_path / ".sourcemap")
+    result = load_ignore_patterns(tmp_path, sourcemap_dir=tmp_path / ".sourcemap")
     assert isinstance(result, Right)
     assert result.value.match_file("legacy/old.py")
 
@@ -381,7 +381,7 @@ def test_load_ignore_config_dir_wins_over_root_sourcemapignore(tmp_path: Path) -
     config.mkdir()
     (config / "ignore").write_text("new-pattern/\n")
     (tmp_path / ".sourcemapignore").write_text("old-pattern/\n")
-    result = load_ignore_patterns(tmp_path, config_dir=config)
+    result = load_ignore_patterns(tmp_path, sourcemap_dir=config)
     assert isinstance(result, Right)
     spec = result.value
     assert spec.match_file("new-pattern/file.py")

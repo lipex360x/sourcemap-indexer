@@ -9,16 +9,9 @@ from sourcemap_indexer.infra.walker import walk_project
 from sourcemap_indexer.lib.either import Either, Left, left, right
 
 
-def _output_dir_pattern(root: Path, output_path: Path) -> str | None:
+def _maps_dir_pattern(root: Path, output_path: Path) -> str | None:
     try:
-        return str(output_path.parent.parent.relative_to(root)) + "/"
-    except ValueError:
-        return None
-
-
-def _relative_dir_pattern(root: Path, directory: Path) -> str | None:
-    try:
-        return str(directory.relative_to(root)) + "/"
+        return str(output_path.parent.relative_to(root)) + "/"
     except ValueError:
         return None
 
@@ -28,18 +21,15 @@ def run_walk(
     output_path: Path,
     known_files: dict[str, tuple[int, int, int, str]] | None = None,
     extra_ignore: list[str] | None = None,
-    config_dir: Path | None = None,
 ) -> Either[str, int]:
-    auto_exclude = filter(
-        None,
-        [
-            _output_dir_pattern(root, output_path),
-            _relative_dir_pattern(root, config_dir) if config_dir else None,
-        ],
-    )
-    combined = list(extra_ignore or []) + list(auto_exclude)
+    sourcemap_dir = output_path.parent
+    maps_pattern = _maps_dir_pattern(root, output_path)
+    combined = list(extra_ignore or []) + ([maps_pattern] if maps_pattern else [])
     walked_result = walk_project(
-        root, known_files=known_files, extra_ignore=combined or None, config_dir=config_dir
+        root,
+        known_files=known_files,
+        extra_ignore=combined or None,
+        sourcemap_dir=sourcemap_dir,
     )
     if isinstance(walked_result, Left):
         return walked_result

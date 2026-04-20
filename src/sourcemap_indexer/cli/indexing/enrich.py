@@ -24,11 +24,11 @@ from sourcemap_indexer.cli._shared import (
     app,
 )
 from sourcemap_indexer.config import (
-    config_dir,
     default_prompt_export_path,
     import_prompt_path,
     index_yaml_path,
     logs_dir,
+    maps_dir,
 )
 from sourcemap_indexer.domain.value_objects import _DEFAULT_LAYERS, Language, Layer
 from sourcemap_indexer.infra.dotenv import load_dotenv
@@ -72,8 +72,7 @@ def enrich(
     project_root = _resolve_root(root)
     load_dotenv(project_root / ".env")
 
-    cfg_dir = config_dir(project_root)
-    user_layers_result = load_user_layers(cfg_dir)
+    user_layers_result = load_user_layers(maps_dir(project_root))
     if isinstance(user_layers_result, Left):
         typer.echo(f"Error: {user_layers_result.error}", err=True)
         raise typer.Exit(1)
@@ -156,9 +155,7 @@ def enrich(
         refresh_per_second=20,
         transient=False,
     ) as live:
-        walk_result = run_walk(
-            project_root, index_path, known_files=repo.load_known_files(), config_dir=cfg_dir
-        )
+        walk_result = run_walk(project_root, index_path, known_files=repo.load_known_files())
         if isinstance(walk_result, Left):
             typer.echo(f"Error: {walk_result.error}", err=True)
             raise typer.Exit(1)
