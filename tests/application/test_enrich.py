@@ -130,6 +130,22 @@ def test_enrich_missing_file_marks_failed(tmp_path: Path) -> None:
     assert result.value.enriched == 0
 
 
+def test_on_progress_total_reflects_actual_count_not_limit(tmp_path: Path) -> None:
+    repo = _make_repo()
+    for i in range(8):
+        item = _make_item(f"file{i}.py", tmp_path)
+        (tmp_path / f"file{i}.py").write_text("x = 1\n")
+        repo.upsert(item)
+    totals: list[int] = []
+
+    def _cb(path: str, success: bool, cur: int, tot: int) -> None:
+        totals.append(tot)
+
+    client = _stub(right(_VALID_RESULT))
+    run_enrich(tmp_path, repo, client, on_progress=_cb, batch_limit=10)  # type: ignore[arg-type]
+    assert all(tot == 8 for tot in totals)
+
+
 def test_enrich_respects_batch_limit(tmp_path: Path) -> None:
     repo = _make_repo()
     for i in range(5):
