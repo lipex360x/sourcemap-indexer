@@ -591,3 +591,54 @@ def test_llm_client_uses_valid_layers_in_prompt() -> None:
     client.enrich("src/f.py", Language.PY, "code")
     assert "controller" in captured[0]
     assert "service" in captured[0]
+
+
+def test_enrich_retries_without_response_format_on_400() -> None:
+    calls: list[dict] = []  # type: ignore[type-arg]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        calls.append(body)
+        if len(calls) == 1:
+            return httpx.Response(400, text="bad request")
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(handler)
+    config = LlmConfig(json_mode=True)
+    client = LlmClient(config, http_client=httpx.Client(transport=transport))
+    result = client.enrich("src/f.py", Language.PY, "code")
+    assert isinstance(result, Right)
+    assert len(calls) == 2
+    assert "response_format" in calls[0]
+    assert "response_format" not in calls[1]
+
+
+def test_enrich_json_fallback_not_triggered_on_500() -> None:
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(500, text="server error")
+
+    transport = httpx.MockTransport(handler)
+    config = LlmConfig(json_mode=True)
+    client = LlmClient(config, http_client=httpx.Client(transport=transport))
+    result = client.enrich("src/f.py", Language.PY, "code")
+    assert isinstance(result, Left)
+    assert "500" in result.error
+    assert len(calls) == 1
+
+
+def test_enrich_json_fallback_not_triggered_when_json_mode_off() -> None:
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(400, text="bad request")
+
+    transport = httpx.MockTransport(handler)
+    config = LlmConfig(json_mode=False)
+    client = LlmClient(config, http_client=httpx.Client(transport=transport))
+    result = client.enrich("src/f.py", Language.PY, "code")
+    assert isinstance(result, Left)
+    assert len(calls) == 1

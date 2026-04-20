@@ -205,6 +205,23 @@ class LlmClient:
             return left("llm-parse-error")
         return right((raw, finish_reason))
 
+    def _is_json_format_error(
+        self, result: Either[str, tuple[str, str]], body: dict[str, Any]
+    ) -> bool:
+        return (
+            isinstance(result, Left)
+            and result.error == "llm-http-error: 400"
+            and "response_format" in body
+        )
+
+    def _post_with_json_fallback(self, body: dict[str, Any]) -> Either[str, tuple[str, str]]:
+        result = self._post_and_extract(body)
+        if not self._is_json_format_error(result, body):
+            return result
+        fallback = dict(body)
+        fallback.pop("response_format", None)
+        return self._post_and_extract(fallback)
+
     def _attempt_and_retry(
         self,
         body: dict[str, Any],
@@ -213,7 +230,7 @@ class LlmClient:
         messages: list[dict[str, str]],
     ) -> Either[str, EnrichmentResult]:
         for attempt in range(2):
-            post_result = self._post_and_extract(body)
+            post_result = self._post_with_json_fallback(body)
             if isinstance(post_result, Left):
                 self._log(path, language, messages, post_result.error)
                 return post_result
