@@ -6,7 +6,7 @@ import yaml
 
 from sourcemap_indexer.lib.llm_log import LlmLog, create_llm_log
 
-_ENV = {}
+_LOG_ON = {"SOURCEMAP_LLM_LOG": "1"}
 
 _RECORD_KWARGS = {
     "path": "src/auth.py",
@@ -21,20 +21,26 @@ _RECORD_KWARGS = {
 }
 
 
-def test_create_llm_log_returns_noop_when_no_log_file(tmp_path: Path) -> None:
-    log = create_llm_log(tmp_path, environ={"NO_LOG_FILE": "1"})
+def test_create_llm_log_returns_noop_by_default(tmp_path: Path) -> None:
+    log = create_llm_log(tmp_path, environ={})
     log.record(**_RECORD_KWARGS)
     assert not (tmp_path / "llm.yaml").exists()
 
 
-def test_record_creates_yaml_file(tmp_path: Path) -> None:
-    log = create_llm_log(tmp_path, environ=_ENV)
+def test_create_llm_log_returns_noop_when_env_absent(tmp_path: Path) -> None:
+    log = create_llm_log(tmp_path, environ={"OTHER_VAR": "1"})
+    log.record(**_RECORD_KWARGS)
+    assert not (tmp_path / "llm.yaml").exists()
+
+
+def test_record_creates_yaml_file_when_enabled(tmp_path: Path) -> None:
+    log = create_llm_log(tmp_path, environ=_LOG_ON)
     log.record(**_RECORD_KWARGS)
     assert (tmp_path / "llm.yaml").exists()
 
 
 def test_record_yaml_contains_metadata(tmp_path: Path) -> None:
-    log = create_llm_log(tmp_path, environ=_ENV)
+    log = create_llm_log(tmp_path, environ=_LOG_ON)
     log.record(**_RECORD_KWARGS)
     content = (tmp_path / "llm.yaml").read_text()
     assert "src/auth.py" in content
@@ -43,7 +49,7 @@ def test_record_yaml_contains_metadata(tmp_path: Path) -> None:
 
 
 def test_record_yaml_contains_messages(tmp_path: Path) -> None:
-    log = create_llm_log(tmp_path, environ=_ENV)
+    log = create_llm_log(tmp_path, environ=_LOG_ON)
     log.record(**_RECORD_KWARGS)
     content = (tmp_path / "llm.yaml").read_text()
     assert "code analyser" in content
@@ -51,14 +57,14 @@ def test_record_yaml_contains_messages(tmp_path: Path) -> None:
 
 
 def test_record_yaml_contains_response(tmp_path: Path) -> None:
-    log = create_llm_log(tmp_path, environ=_ENV)
+    log = create_llm_log(tmp_path, environ=_LOG_ON)
     log.record(**_RECORD_KWARGS)
     content = (tmp_path / "llm.yaml").read_text()
     assert "Validates JWT tokens" in content
 
 
 def test_multiple_records_all_present(tmp_path: Path) -> None:
-    log = create_llm_log(tmp_path, environ=_ENV)
+    log = create_llm_log(tmp_path, environ=_LOG_ON)
     log.record(**{**_RECORD_KWARGS, "path": "a.py"})
     log.record(**{**_RECORD_KWARGS, "path": "b.py"})
     content = (tmp_path / "llm.yaml").read_text()
@@ -67,7 +73,7 @@ def test_multiple_records_all_present(tmp_path: Path) -> None:
 
 
 def test_multiple_records_are_valid_yaml_documents(tmp_path: Path) -> None:
-    log = create_llm_log(tmp_path, environ=_ENV)
+    log = create_llm_log(tmp_path, environ=_LOG_ON)
     log.record(**{**_RECORD_KWARGS, "path": "a.py"})
     log.record(**{**_RECORD_KWARGS, "path": "b.py"})
     raw = (tmp_path / "llm.yaml").read_text()
@@ -78,7 +84,7 @@ def test_multiple_records_are_valid_yaml_documents(tmp_path: Path) -> None:
 
 
 def test_record_error_result(tmp_path: Path) -> None:
-    log = create_llm_log(tmp_path, environ=_ENV)
+    log = create_llm_log(tmp_path, environ=_LOG_ON)
     log.record(**{**_RECORD_KWARGS, "response_raw": "", "result": "llm-timeout"})
     content = (tmp_path / "llm.yaml").read_text()
     assert "llm-timeout" in content
@@ -86,16 +92,16 @@ def test_record_error_result(tmp_path: Path) -> None:
 
 def test_record_creates_parent_dir_if_missing(tmp_path: Path) -> None:
     nested = tmp_path / "deep" / "nested" / "logs"
-    log = create_llm_log(nested, environ=_ENV)
+    log = create_llm_log(nested, environ=_LOG_ON)
     log.record(**_RECORD_KWARGS)
     assert (nested / "llm.yaml").exists()
 
 
 def test_noop_log_has_record_method() -> None:
-    log = create_llm_log(Path("/unused"), environ={"NO_LOG_FILE": "1"})
+    log = create_llm_log(Path("/unused"), environ={})
     assert callable(getattr(log, "record", None))
 
 
 def test_llm_log_is_runtime_checkable(tmp_path: Path) -> None:
-    log = create_llm_log(tmp_path, environ=_ENV)
+    log = create_llm_log(tmp_path, environ=_LOG_ON)
     assert isinstance(log, LlmLog)
