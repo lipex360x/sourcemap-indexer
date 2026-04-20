@@ -460,3 +460,43 @@ def test_context_manager_closes_on_exit() -> None:
 def test_del_closes_connection() -> None:
     repo = _make_repo()
     del repo
+
+
+def test_load_known_files_returns_empty_on_empty_table() -> None:
+    repo = _make_repo()
+    result = repo.load_known_files()
+    assert result == {}
+
+
+def test_load_known_files_returns_all_active_items() -> None:
+    repo = _make_repo()
+    item = _make_item(path="src/app.py")
+    repo.upsert(item)
+    result = repo.load_known_files()
+    assert "src/app.py" in result
+    mtime, size_bytes, lines, content_hash = result["src/app.py"]
+    assert mtime == item.last_modified
+    assert size_bytes == item.size_bytes
+    assert lines == item.lines
+    assert content_hash == item.content_hash.hex_value
+
+
+def test_load_known_files_excludes_soft_deleted() -> None:
+    repo = _make_repo()
+    item = _make_item(path="src/deleted.py")
+    repo.upsert(item)
+    repo.soft_delete(item.id, int(time.time()))
+    result = repo.load_known_files()
+    assert "src/deleted.py" not in result
+
+
+def test_load_known_files_returns_multiple_items() -> None:
+    repo = _make_repo()
+    repo.upsert(_make_item(path="src/a.py"))
+    repo.upsert(_make_item(path="src/b.py"))
+    repo.upsert(_make_item(path="src/c.py"))
+    result = repo.load_known_files()
+    assert len(result) == 3
+    assert "src/a.py" in result
+    assert "src/b.py" in result
+    assert "src/c.py" in result

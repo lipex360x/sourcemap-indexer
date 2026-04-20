@@ -115,12 +115,12 @@ def init(root: str | None = typer.Option(None, help="Project root")) -> None:
 def walk(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
     output = index_yaml_path(project_root)
-    walk_result = run_walk(project_root, output)
+    repo = _open_repo(project_root)
+    walk_result = run_walk(project_root, output, known_files=repo.load_known_files())
     if isinstance(walk_result, Left):
         typer.echo(f"Error: {walk_result.error}", err=True)
         raise typer.Exit(1)
     typer.echo(f"Walked {walk_result.value} files → {output}")
-    repo = _open_repo(project_root)
     sync_result = run_sync(output, repo)
     if isinstance(sync_result, Left):
         typer.echo(f"Error: {sync_result.error}", err=True)
