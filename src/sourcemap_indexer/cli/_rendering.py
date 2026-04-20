@@ -30,3 +30,8 @@ def _proportional_width(count: int, max_count: int, max_width: int = 20) -> int:
     if max_count == 0:
         return 0
     return max(1, round(count / max_count * max_width))
+
+
+def _enriched_bar(enriched_count: int, total_count: int, width: int) -> str:
+    filled = round(enriched_count / total_count * width) if total_count else 0
+    return "●" * filled + "○" * (width - filled)
