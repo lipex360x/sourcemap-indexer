@@ -228,12 +228,16 @@ def stats(root: str | None = typer.Option(None, help="Project root")) -> None:
         by_layer[str(item.layer)] = by_layer.get(str(item.layer), 0) + 1
         by_lang[str(item.language)] = by_lang.get(str(item.language), 0) + 1
 
+    load_dotenv(project_root / ".env")
+    llm = from_environ()
+
     sep = "━" * 52
     pct = round(enriched / total * 100) if total else 0
     prog_filled = round(pct / 100 * 20)
     progress = "█" * prog_filled + "░" * (20 - prog_filled)
 
     typer.echo(sep)
+    typer.echo(f"  Model: {llm.model}  ({llm.url})")
     typer.echo(f"  Total: {total:<6}  Enriched: {enriched:<6}  Pending: {pending}")
     typer.echo(f"  [{progress}] {pct}%")
     typer.echo("")
