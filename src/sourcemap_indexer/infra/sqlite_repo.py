@@ -216,6 +216,16 @@ class SqliteItemRepository:
         except sqlite3.Error as error:
             return left(f"db-error: {error}")
 
+    def load_known_files(self) -> dict[str, tuple[int, int, int, str]]:
+        try:
+            rows = self._connection.execute(
+                "SELECT path, last_modified, size_bytes, lines, content_hash "
+                "FROM items WHERE deleted_at IS NULL"
+            ).fetchall()
+            return {row[0]: (row[1], row[2], row[3], row[4]) for row in rows}
+        except sqlite3.Error:
+            return {}
+
     def soft_delete(self, item_id: ItemId, deleted_at: int) -> Either[str, None]:
         try:
             with self._connection:

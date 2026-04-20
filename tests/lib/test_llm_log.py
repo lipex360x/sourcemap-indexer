@@ -18,6 +18,7 @@ _RECORD_KWARGS = {
     ],
     "response_raw": '{"purpose": "Validates JWT tokens"}',
     "result": "ok",
+    "finish_reason": "stop",
 }
 
 

@@ -41,6 +41,7 @@ class LlmConfig:
     timeout_seconds: float = 60.0
     max_chars: int = 8000
     api_key: str = ""
+    json_mode: bool = True
 
 
 @dataclass(frozen=True)
@@ -58,11 +59,22 @@ def is_llm_configured() -> bool:
 
 
 def from_environ() -> LlmConfig:
+    json_mode_val = os.environ.get("SOURCEMAP_LLM_JSON_MODE", "1")
     return LlmConfig(
         url=os.environ["SOURCEMAP_LLM_URL"],
         model=os.environ["SOURCEMAP_LLM_MODEL"],
         api_key=os.environ.get("SOURCEMAP_LLM_API_KEY", LlmConfig.api_key),
+        json_mode=json_mode_val != "0",
     )
+
+
+def _truncate(content: str, max_chars: int) -> str:
+    if len(content) <= max_chars:
+        return content
+    head = round(max_chars * 2 / 3)
+    tail = max_chars - head
+    skipped = len(content) - head - tail
+    return content[:head] + f"\n... [truncated {skipped} chars] ...\n" + content[-tail:]
 
 
 def _parse_enrichment(raw: str) -> Either[str, EnrichmentResult]:
@@ -107,7 +119,7 @@ def _parse_enrichment(raw: str) -> Either[str, EnrichmentResult]:
     )
 
 
-class LlamaClient:
+class LlmClient:
     def __init__(
         self,
         config: LlmConfig,
@@ -140,24 +152,26 @@ class LlamaClient:
         content: str,
         extra_instruction: str | None = None,
     ) -> Either[str, EnrichmentResult]:
-        if len(content) > self._config.max_chars:
-            content = content[: self._config.max_chars]
+        content = _truncate(content, self._config.max_chars)
         system = self._system_prompt
         if extra_instruction:
             system = system + f"\n\nAdditional instruction: {extra_instruction}"
-        user_prompt = f"Path: {path}\nLanguage: {language}\n\n---\n{content}"
+        lang_str = str(language)
+        user_prompt = f"Path: {path}\nLanguage: {language}\n\n```{lang_str}\n{content}\n```"
         messages: list[dict[str, str]] = [
             {"role": "system", "content": system},
             {"role": "user", "content": user_prompt},
         ]
-        body = {
+        body: dict[str, Any] = {
             "model": self._config.model,
             "messages": messages,
             "temperature": self._config.temperature,
             "max_tokens": self._config.max_tokens,
         }
+        if self._config.json_mode:
+            body["response_format"] = {"type": "json_object"}
 
-        def _log(result: str, response_raw: str = "") -> None:
+        def _log(result: str, response_raw: str = "", finish_reason: str = "") -> None:
             if self._llm_log is not None:
                 self._llm_log.record(
                     path=path,
@@ -166,29 +180,43 @@ class LlamaClient:
                     messages=messages,
                     response_raw=response_raw,
                     result=result,
+                    finish_reason=finish_reason,
                 )
 
-        try:
-            response = self._http.post(self._config.url, json=body, headers=self._auth_headers())
-        except httpx.TimeoutException:
-            _log("llm-timeout")
-            return left("llm-timeout")
-        except httpx.RequestError as error:
-            result_code = f"llm-request-error: {error}"
-            _log(result_code)
-            return left(result_code)
+        for attempt in range(2):
+            try:
+                response = self._http.post(
+                    self._config.url, json=body, headers=self._auth_headers()
+                )
+            except httpx.TimeoutException:
+                _log("llm-timeout")
+                return left("llm-timeout")
+            except httpx.RequestError as error:
+                result_code = f"llm-request-error: {error}"
+                _log(result_code)
+                return left(result_code)
 
-        if response.status_code != 200:
-            result_code = f"llm-http-error: {response.status_code}"
-            _log(result_code)
-            return left(result_code)
+            if response.status_code != 200:
+                result_code = f"llm-http-error: {response.status_code}"
+                _log(result_code)
+                return left(result_code)
 
-        try:
-            raw = response.json()["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, json.JSONDecodeError):
-            _log("llm-parse-error")
-            return left("llm-parse-error")
+            try:
+                choice = response.json()["choices"][0]
+                raw = choice["message"]["content"]
+                finish_reason = str(choice.get("finish_reason", ""))
+            except (KeyError, IndexError, json.JSONDecodeError):
+                _log("llm-parse-error")
+                return left("llm-parse-error")
 
-        parsed = _parse_enrichment(raw)
-        _log("ok" if isinstance(parsed, Right) else parsed.error, raw)
-        return parsed
+            parsed = _parse_enrichment(raw)
+            if isinstance(parsed, Right):
+                _log("ok", raw, finish_reason)
+                return parsed
+            if attempt == 0:
+                continue
+            _log(parsed.error, raw, finish_reason)
+            return parsed
+
+        _log("llm-parse-error")
+        return left("llm-parse-error")

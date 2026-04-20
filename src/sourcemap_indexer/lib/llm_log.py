@@ -20,6 +20,7 @@ class LlmLog(Protocol):
         messages: list[dict[str, str]],
         response_raw: str,
         result: str,
+        finish_reason: str,
     ) -> None: ...
 
 
@@ -34,6 +35,7 @@ class _NoopLlmLog:
         messages: list[dict[str, str]],
         response_raw: str,
         result: str,
+        finish_reason: str,
     ) -> None:
         pass
 
@@ -51,6 +53,7 @@ class _FileLlmLog:
         messages: list[dict[str, str]],
         response_raw: str,
         result: str,
+        finish_reason: str,
     ) -> None:
         entry = {
             "timestamp": datetime.now(tz=UTC).isoformat(timespec="seconds"),
@@ -58,6 +61,7 @@ class _FileLlmLog:
             "language": language,
             "model": model,
             "result": result,
+            "finish_reason": finish_reason or None,
             "request": {"messages": messages},
             "response": response_raw or None,
         }
