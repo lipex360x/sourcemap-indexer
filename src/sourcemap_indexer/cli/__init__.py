@@ -15,6 +15,6 @@ from sourcemap_indexer.cli.maintenance import (  # noqa: F401
     reset,
     restore,
 )
-from sourcemap_indexer.infra.llama_client import LlamaClient
+from sourcemap_indexer.infra.llm_client import LlmClient
 
-__all__ = ["LlamaClient", "_lang_color", "_proportional_width", "app"]
+__all__ = ["LlmClient", "_lang_color", "_proportional_width", "app"]

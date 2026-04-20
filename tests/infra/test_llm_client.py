@@ -6,9 +6,9 @@ import httpx
 import pytest
 
 from sourcemap_indexer.domain.value_objects import Language, Layer, SideEffect, Stability
-from sourcemap_indexer.infra.llama_client import (
+from sourcemap_indexer.infra.llm_client import (
     EnrichmentResult,
-    LlamaClient,
+    LlmClient,
     LlmConfig,
     from_environ,
 )
@@ -25,15 +25,19 @@ _VALID_PAYLOAD = {
 }
 
 
-def _mock_response(body: dict[str, object], status: int = 200) -> httpx.Response:
-    content = json.dumps({"choices": [{"message": {"content": json.dumps(body)}}]})
+def _mock_response(
+    body: dict[str, object], status: int = 200, finish_reason: str = "stop"
+) -> httpx.Response:
+    content = json.dumps(
+        {"choices": [{"message": {"content": json.dumps(body)}, "finish_reason": finish_reason}]}
+    )
     return httpx.Response(status, text=content)
 
 
-def _client_with(response: httpx.Response) -> LlamaClient:
+def _client_with(response: httpx.Response) -> LlmClient:
     transport = httpx.MockTransport(lambda request: response)
     http_client = httpx.Client(transport=transport)
-    return LlamaClient(LlmConfig(), http_client=http_client)
+    return LlmClient(LlmConfig(), http_client=http_client)
 
 
 def test_llm_config_defaults() -> None:
@@ -64,7 +68,7 @@ def test_client_sends_auth_header_when_api_key_set() -> None:
     transport = httpx.MockTransport(capture)
     http_client = httpx.Client(transport=transport)
     config = LlmConfig(api_key="my-key")
-    client = LlamaClient(config, http_client=http_client)
+    client = LlmClient(config, http_client=http_client)
     client.enrich("src/f.py", Language.PY, "code")
     assert captured[0] == "Bearer my-key"
 
@@ -78,7 +82,7 @@ def test_client_sends_no_auth_header_when_api_key_empty() -> None:
 
     transport = httpx.MockTransport(capture)
     http_client = httpx.Client(transport=transport)
-    client = LlamaClient(LlmConfig(), http_client=http_client)
+    client = LlmClient(LlmConfig(), http_client=http_client)
     client.enrich("src/f.py", Language.PY, "code")
     assert captured[0] == ""
 
@@ -96,11 +100,11 @@ def test_content_is_truncated_when_exceeds_max_chars() -> None:
     transport = httpx.MockTransport(capture)
     http_client = httpx.Client(transport=transport)
     config = LlmConfig(max_chars=10)
-    client = LlamaClient(config, http_client=http_client)
+    client = LlmClient(config, http_client=http_client)
     client.enrich("src/f.py", Language.PY, "A" * 100)
     assert len(captured) == 1
     assert "A" * 100 not in captured[0]
-    assert "A" * 10 in captured[0]
+    assert "[truncated" in captured[0]
 
 
 def test_from_environ_reads_url(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -136,7 +140,7 @@ def test_is_llm_configured_returns_true_when_url_and_model_set(
 ) -> None:
     monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://myhost/v1/chat/completions")
     monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "my-model")
-    from sourcemap_indexer.infra.llama_client import is_llm_configured
+    from sourcemap_indexer.infra.llm_client import is_llm_configured
 
     assert is_llm_configured() is True
 
@@ -144,7 +148,7 @@ def test_is_llm_configured_returns_true_when_url_and_model_set(
 def test_is_llm_configured_returns_false_when_url_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
     monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "my-model")
-    from sourcemap_indexer.infra.llama_client import is_llm_configured
+    from sourcemap_indexer.infra.llm_client import is_llm_configured
 
     assert is_llm_configured() is False
 
@@ -152,7 +156,7 @@ def test_is_llm_configured_returns_false_when_url_absent(monkeypatch: pytest.Mon
 def test_is_llm_configured_returns_false_when_model_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://myhost/v1/chat/completions")
     monkeypatch.delenv("SOURCEMAP_LLM_MODEL", raising=False)
-    from sourcemap_indexer.infra.llama_client import is_llm_configured
+    from sourcemap_indexer.infra.llm_client import is_llm_configured
 
     assert is_llm_configured() is False
 
@@ -174,7 +178,7 @@ def test_enrich_parses_json_inside_markdown_fence() -> None:
     content = json.dumps({"choices": [{"message": {"content": fenced}}]})
     transport = httpx.MockTransport(lambda request: httpx.Response(200, text=content))
     http_client = httpx.Client(transport=transport)
-    client = LlamaClient(LlmConfig(), http_client=http_client)
+    client = LlmClient(LlmConfig(), http_client=http_client)
     result = client.enrich("src/auth.py", Language.PY, "code")
     assert isinstance(result, Right)
     assert result.value.purpose == "Validates JWT tokens"
@@ -184,7 +188,7 @@ def test_enrich_returns_left_for_invalid_json() -> None:
     content = json.dumps({"choices": [{"message": {"content": "not json at all"}}]})
     transport = httpx.MockTransport(lambda request: httpx.Response(200, text=content))
     http_client = httpx.Client(transport=transport)
-    client = LlamaClient(LlmConfig(), http_client=http_client)
+    client = LlmClient(LlmConfig(), http_client=http_client)
     result = client.enrich("src/f.py", Language.PY, "code")
     assert isinstance(result, Left)
     assert result.error == "llm-parse-error"
@@ -193,7 +197,7 @@ def test_enrich_returns_left_for_invalid_json() -> None:
 def test_enrich_returns_left_for_http_error() -> None:
     transport = httpx.MockTransport(lambda request: httpx.Response(500, text="error"))
     http_client = httpx.Client(transport=transport)
-    client = LlamaClient(LlmConfig(), http_client=http_client)
+    client = LlmClient(LlmConfig(), http_client=http_client)
     result = client.enrich("src/f.py", Language.PY, "code")
     assert isinstance(result, Left)
     assert result.error == "llm-http-error: 500"
@@ -205,7 +209,7 @@ def test_enrich_returns_left_on_timeout() -> None:
 
     transport = httpx.MockTransport(raise_timeout)
     http_client = httpx.Client(transport=transport)
-    client = LlamaClient(LlmConfig(), http_client=http_client)
+    client = LlmClient(LlmConfig(), http_client=http_client)
     result = client.enrich("src/f.py", Language.PY, "code")
     assert isinstance(result, Left)
     assert result.error == "llm-timeout"
@@ -242,7 +246,7 @@ def test_enrich_returns_left_on_request_error() -> None:
 
     transport = httpx.MockTransport(raise_error)
     http_client = httpx.Client(transport=transport)
-    client = LlamaClient(LlmConfig(), http_client=http_client)
+    client = LlmClient(LlmConfig(), http_client=http_client)
     result = client.enrich("src/f.py", Language.PY, "code")
     assert isinstance(result, Left)
     assert result.error.startswith("llm-request-error")
@@ -252,7 +256,7 @@ def test_enrich_returns_left_when_response_missing_choices() -> None:
     content = json.dumps({"result": "no choices key"})
     transport = httpx.MockTransport(lambda request: httpx.Response(200, text=content))
     http_client = httpx.Client(transport=transport)
-    client = LlamaClient(LlmConfig(), http_client=http_client)
+    client = LlmClient(LlmConfig(), http_client=http_client)
     result = client.enrich("src/f.py", Language.PY, "code")
     assert isinstance(result, Left)
     assert result.error == "llm-parse-error"
@@ -263,7 +267,7 @@ def test_parse_json_block_found_but_still_invalid_returns_left() -> None:
     content = json.dumps({"choices": [{"message": {"content": bad}}]})
     transport = httpx.MockTransport(lambda request: httpx.Response(200, text=content))
     http_client = httpx.Client(transport=transport)
-    client = LlamaClient(LlmConfig(), http_client=http_client)
+    client = LlmClient(LlmConfig(), http_client=http_client)
     result = client.enrich("src/f.py", Language.PY, "code")
     assert isinstance(result, Left)
     assert result.error == "llm-parse-error"
@@ -283,7 +287,7 @@ def test_enrichment_result_has_expected_fields() -> None:
 def test_ping_returns_right_when_server_responds() -> None:
     transport = httpx.MockTransport(lambda request: httpx.Response(200, text="[]"))
     http_client = httpx.Client(transport=transport)
-    client = LlamaClient(LlmConfig(), http_client=http_client)
+    client = LlmClient(LlmConfig(), http_client=http_client)
     result = client.ping()
     assert isinstance(result, Right)
 
@@ -294,7 +298,7 @@ def test_ping_returns_left_on_connect_error() -> None:
 
     transport = httpx.MockTransport(raise_connect)
     http_client = httpx.Client(transport=transport)
-    client = LlamaClient(LlmConfig(), http_client=http_client)
+    client = LlmClient(LlmConfig(), http_client=http_client)
     result = client.ping()
     assert isinstance(result, Left)
     assert "llm-unreachable" in result.error
@@ -303,7 +307,7 @@ def test_ping_returns_left_on_connect_error() -> None:
 def test_ping_returns_right_on_any_http_status() -> None:
     transport = httpx.MockTransport(lambda request: httpx.Response(404, text="not found"))
     http_client = httpx.Client(transport=transport)
-    client = LlamaClient(LlmConfig(), http_client=http_client)
+    client = LlmClient(LlmConfig(), http_client=http_client)
     result = client.ping()
     assert isinstance(result, Right)
 
@@ -321,6 +325,7 @@ class _CaptureLlmLog:
         messages: list[dict[str, str]],
         response_raw: str,
         result: str,
+        finish_reason: str,
     ) -> None:
         self.calls.append(
             {
@@ -330,6 +335,7 @@ class _CaptureLlmLog:
                 "messages": messages,
                 "response_raw": response_raw,
                 "result": result,
+                "finish_reason": finish_reason,
             }
         )
 
@@ -342,7 +348,7 @@ def test_enrich_calls_llm_log_on_success() -> None:
     spy = _CaptureLlmLog()
     _assert_is_llm_log(spy)
     transport = httpx.MockTransport(lambda _r: _mock_response(_VALID_PAYLOAD))
-    client = LlamaClient(LlmConfig(), http_client=httpx.Client(transport=transport), llm_log=spy)
+    client = LlmClient(LlmConfig(), http_client=httpx.Client(transport=transport), llm_log=spy)
     client.enrich("src/auth.py", Language.PY, "code")
     assert len(spy.calls) == 1
     assert spy.calls[0]["path"] == "src/auth.py"
@@ -353,7 +359,7 @@ def test_enrich_calls_llm_log_on_success() -> None:
 def test_enrich_calls_llm_log_on_http_error() -> None:
     spy = _CaptureLlmLog()
     transport = httpx.MockTransport(lambda _r: httpx.Response(500, text="err"))
-    client = LlamaClient(LlmConfig(), http_client=httpx.Client(transport=transport), llm_log=spy)
+    client = LlmClient(LlmConfig(), http_client=httpx.Client(transport=transport), llm_log=spy)
     client.enrich("src/f.py", Language.PY, "code")
     assert len(spy.calls) == 1
     assert spy.calls[0]["result"] == "llm-http-error: 500"
@@ -366,7 +372,7 @@ def test_enrich_calls_llm_log_on_timeout() -> None:
         raise httpx.TimeoutException("timed out", request=request)
 
     transport = httpx.MockTransport(raise_timeout)
-    client = LlamaClient(LlmConfig(), http_client=httpx.Client(transport=transport), llm_log=spy)
+    client = LlmClient(LlmConfig(), http_client=httpx.Client(transport=transport), llm_log=spy)
     client.enrich("src/f.py", Language.PY, "code")
     assert len(spy.calls) == 1
     assert spy.calls[0]["result"] == "llm-timeout"
@@ -375,7 +381,7 @@ def test_enrich_calls_llm_log_on_timeout() -> None:
 
 def test_enrich_without_llm_log_still_works() -> None:
     transport = httpx.MockTransport(lambda _r: _mock_response(_VALID_PAYLOAD))
-    client = LlamaClient(LlmConfig(), http_client=httpx.Client(transport=transport))
+    client = LlmClient(LlmConfig(), http_client=httpx.Client(transport=transport))
     result = client.enrich("src/f.py", Language.PY, "code")
     assert isinstance(result, Right)
 
@@ -389,7 +395,7 @@ def test_custom_system_prompt_is_sent_to_llm() -> None:
         return _mock_response(_VALID_PAYLOAD)
 
     transport = httpx.MockTransport(capture)
-    client = LlamaClient(
+    client = LlmClient(
         LlmConfig(),
         http_client=httpx.Client(transport=transport),
         system_prompt="my custom instructions",
@@ -400,7 +406,7 @@ def test_custom_system_prompt_is_sent_to_llm() -> None:
 
 
 def test_default_system_prompt_used_when_none_passed() -> None:
-    from sourcemap_indexer.infra.llama_client import SYSTEM_PROMPT
+    from sourcemap_indexer.infra.llm_client import SYSTEM_PROMPT
 
     captured: list[str] = []
 
@@ -410,6 +416,146 @@ def test_default_system_prompt_used_when_none_passed() -> None:
         return _mock_response(_VALID_PAYLOAD)
 
     transport = httpx.MockTransport(capture)
-    client = LlamaClient(LlmConfig(), http_client=httpx.Client(transport=transport))
+    client = LlmClient(LlmConfig(), http_client=httpx.Client(transport=transport))
     client.enrich("src/f.py", Language.PY, "code")
     assert captured[0] == SYSTEM_PROMPT
+
+
+def test_enrich_wraps_content_in_code_fence() -> None:
+    captured: list[str] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        captured.append(body["messages"][1]["content"])
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(capture)
+    client = LlmClient(LlmConfig(), http_client=httpx.Client(transport=transport))
+    client.enrich("src/f.py", Language.PY, "x = 1")
+    assert "```py" in captured[0]
+    assert "x = 1" in captured[0]
+    assert captured[0].endswith("```")
+
+
+def test_enrich_truncates_with_head_and_tail_when_over_limit() -> None:
+    captured: list[str] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        captured.append(body["messages"][1]["content"])
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(capture)
+    config = LlmConfig(max_chars=20)
+    client = LlmClient(config, http_client=httpx.Client(transport=transport))
+    client.enrich("src/f.py", Language.PY, "A" * 15 + "B" * 15)
+    assert "[truncated" in captured[0]
+    assert "A" * 15 not in captured[0]
+    assert "BBB" in captured[0]
+
+
+def test_enrich_no_truncation_marker_when_under_limit() -> None:
+    captured: list[str] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        captured.append(body["messages"][1]["content"])
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(capture)
+    config = LlmConfig(max_chars=100)
+    client = LlmClient(config, http_client=httpx.Client(transport=transport))
+    client.enrich("src/f.py", Language.PY, "A" * 50)
+    assert "[truncated" not in captured[0]
+    assert "A" * 50 in captured[0]
+
+
+def test_enrich_sends_response_format_when_json_mode_enabled() -> None:
+    captured: list[dict[str, object]] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        captured.append(body)
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(capture)
+    config = LlmConfig(json_mode=True)
+    client = LlmClient(config, http_client=httpx.Client(transport=transport))
+    client.enrich("src/f.py", Language.PY, "code")
+    assert captured[0].get("response_format") == {"type": "json_object"}
+
+
+def test_enrich_omits_response_format_when_json_mode_disabled() -> None:
+    captured: list[dict[str, object]] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        captured.append(body)
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(capture)
+    config = LlmConfig(json_mode=False)
+    client = LlmClient(config, http_client=httpx.Client(transport=transport))
+    client.enrich("src/f.py", Language.PY, "code")
+    assert "response_format" not in captured[0]
+
+
+def test_from_environ_defaults_json_mode_to_true(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://host/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "my-model")
+    monkeypatch.delenv("SOURCEMAP_LLM_JSON_MODE", raising=False)
+    config = from_environ()
+    assert config.json_mode is True
+
+
+def test_from_environ_reads_json_mode_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://host/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "my-model")
+    monkeypatch.setenv("SOURCEMAP_LLM_JSON_MODE", "0")
+    config = from_environ()
+    assert config.json_mode is False
+
+
+def test_enrich_logs_finish_reason() -> None:
+    spy = _CaptureLlmLog()
+    transport = httpx.MockTransport(lambda _r: _mock_response(_VALID_PAYLOAD, finish_reason="stop"))
+    client = LlmClient(LlmConfig(), http_client=httpx.Client(transport=transport), llm_log=spy)
+    client.enrich("src/f.py", Language.PY, "code")
+    assert spy.calls[0]["finish_reason"] == "stop"
+
+
+def test_enrich_retries_once_on_parse_error() -> None:
+    call_count = 0
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            bad_choices = [{"message": {"content": "not json"}, "finish_reason": "stop"}]
+            bad = json.dumps({"choices": bad_choices})
+            return httpx.Response(200, text=bad)
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(respond)
+    client = LlmClient(LlmConfig(), http_client=httpx.Client(transport=transport))
+    result = client.enrich("src/f.py", Language.PY, "code")
+    assert isinstance(result, Right)
+    assert call_count == 2
+
+
+def test_enrich_fails_after_two_parse_errors() -> None:
+    call_count = 0
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        nonlocal call_count
+        call_count += 1
+        bad_choices = [{"message": {"content": "not json"}, "finish_reason": "stop"}]
+        bad = json.dumps({"choices": bad_choices})
+        return httpx.Response(200, text=bad)
+
+    transport = httpx.MockTransport(respond)
+    client = LlmClient(LlmConfig(), http_client=httpx.Client(transport=transport))
+    result = client.enrich("src/f.py", Language.PY, "code")
+    assert isinstance(result, Left)
+    assert result.error == "llm-parse-error"
+    assert call_count == 2

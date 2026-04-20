@@ -177,7 +177,7 @@ def test_stats_auto_walk_shows_sync_summary_when_changed(
     (tmp_path / "new.py").write_text("y = 2\n")
     result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
     assert result.exit_code == 0
-    assert "inserted=1" in result.output
+    assert "Inserted" in result.output
 
 
 def test_stats_shows_model_when_configured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -213,6 +213,83 @@ def test_stats_shows_project_root_in_header(
     assert "Root" in result.output
 
 
+class _MockTask:
+    def __init__(self, completed: float, total: float | None) -> None:
+        self.completed = completed
+        self.total = total
+
+
+def test_hybrid_bar_full_green_when_complete() -> None:
+    from sourcemap_indexer.cli._rendering import _HybridProgressColumn
+
+    col = _HybridProgressColumn(width=10)
+    text = col.render(_MockTask(10, 10))  # type: ignore[arg-type]
+    plain = text.plain
+    assert plain == "●" * 10
+    assert all(s.style == "green" for s in text._spans)
+
+
+def test_hybrid_bar_indeterminate_is_yellow() -> None:
+    from sourcemap_indexer.cli._rendering import _HybridProgressColumn
+
+    col = _HybridProgressColumn(width=10)
+    text = col.render(_MockTask(0, None))  # type: ignore[arg-type]
+    assert len(text.plain) == 10
+    assert all(s.style == "yellow" for s in text._spans)
+
+
+def test_hybrid_bar_partial_green_count_proportional() -> None:
+    from sourcemap_indexer.cli._rendering import _HybridProgressColumn
+
+    col = _HybridProgressColumn(width=10)
+    text = col.render(_MockTask(5, 10))  # type: ignore[arg-type]
+    assert len(text.plain) == 10
+    spans = text._spans
+    assert spans[0].style == "green"
+    green_text = text.plain[spans[0].start : spans[0].end]
+    assert green_text == "●" * 5
+    non_green = text.plain[spans[0].end :]
+    assert len(non_green) == 5
+
+
+def test_hybrid_bar_pending_has_one_yellow_pulse_rest_dim() -> None:
+    from sourcemap_indexer.cli._rendering import _HybridProgressColumn
+
+    col = _HybridProgressColumn(width=10)
+    text = col.render(_MockTask(3, 10))  # type: ignore[arg-type]
+    yellow_spans = [s for s in text._spans if s.style == "yellow"]
+    dim_spans = [s for s in text._spans if s.style == "dim"]
+    yellow_chars = "".join(text.plain[s.start : s.end] for s in yellow_spans)
+    dim_chars = "".join(text.plain[s.start : s.end] for s in dim_spans)
+    assert yellow_chars == "●"
+    assert set(dim_chars) <= {"○"}
+    assert len(dim_chars) + 1 == 7
+
+
+def test_panel_default_style_is_info() -> None:
+    from rich.panel import Panel
+
+    from sourcemap_indexer.cli._rendering import _panel
+
+    result = _panel("content", "Title")
+    assert isinstance(result, Panel)
+    assert result.border_style == "bright_blue"
+
+
+def test_panel_warn_style() -> None:
+    from sourcemap_indexer.cli._rendering import _panel
+
+    result = _panel("content", "Title", style="warn")
+    assert result.border_style == "yellow"
+
+
+def test_panel_error_style() -> None:
+    from sourcemap_indexer.cli._rendering import _panel
+
+    result = _panel("content", "Title", style="error")
+    assert result.border_style == "red"
+
+
 def test_enriched_bar_full_when_all_enriched() -> None:
     from sourcemap_indexer.cli._rendering import _enriched_bar
 
@@ -241,6 +318,30 @@ def test_enriched_bar_zero_total_returns_empty_width() -> None:
     from sourcemap_indexer.cli._rendering import _enriched_bar
 
     assert _enriched_bar(0, 0, 3) == "○○○"
+
+
+def test_color_legend_is_right_aligned() -> None:
+    from rich.align import Align
+
+    from sourcemap_indexer.cli._rendering import _color_legend
+
+    assert isinstance(_color_legend(), Align)
+
+
+def test_color_legend_contains_symbols_separated_by_pipe() -> None:
+    from rich.console import Console
+    from rich.text import Text
+
+    from sourcemap_indexer.cli._rendering import _color_legend
+
+    console = Console(highlight=False)
+    with console.capture() as cap:
+        console.print(_color_legend())
+    plain = Text.from_ansi(cap.get()).plain
+    assert plain.count("●") >= 2
+    assert "○" in plain
+    assert "|" in plain
+    assert "=" not in plain
 
 
 def test_stats_by_language_shows_filled_bar_for_enriched_small_language(
@@ -303,6 +404,18 @@ def test_stats_succeeds_on_empty_uninitialised_dir(tmp_path: Path) -> None:
     assert "Total: 0" in result.output
 
 
+def test_stats_shows_legend_below_by_language(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
+    (tmp_path / "app.py").write_text("x = 1\n")
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "●" in result.output
+    assert "|" in result.output
+
+
 def test_enrich_fails_when_llm_not_configured(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -327,14 +440,14 @@ def test_enrich_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
             EnrichReport(enriched=2, failed=0, skipped=1, errors=("warn",))
         ),
     )
-    monkeypatch.setattr(cli_module.LlamaClient, "ping", lambda _self: right(None))
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: right(None))
     (tmp_path / "app.py").write_text("x = 1\n")
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     runner.invoke(app, ["walk", "--root", str(tmp_path)])
     runner.invoke(app, ["sync", "--root", str(tmp_path)])
     result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
     assert result.exit_code == 0
-    assert "enriched=2" in result.output
+    assert "Enriched" in result.output
 
 
 def test_enrich_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -343,7 +456,7 @@ def test_enrich_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
     monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
-    monkeypatch.setattr(cli_module.LlamaClient, "ping", lambda _self: right(None))
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: right(None))
     monkeypatch.setattr(
         "sourcemap_indexer.cli.indexing.enrich.run_enrich",
         lambda *_args, **_kwargs: left("llm-error"),
@@ -559,7 +672,7 @@ def test_enrich_export_llm_prompt_creates_default_md_file(
 def test_enrich_export_llm_prompt_content_matches_system_prompt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from sourcemap_indexer.infra.llama_client import SYSTEM_PROMPT
+    from sourcemap_indexer.infra.llm_client import SYSTEM_PROMPT
 
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
     runner.invoke(app, ["init", "--root", str(tmp_path)])
@@ -589,7 +702,7 @@ def test_enrich_uses_custom_prompt_from_import_env(
 
     monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
     monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
-    monkeypatch.setattr(cli_module.LlamaClient, "ping", lambda _self: right(None))
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: right(None))
     monkeypatch.setattr(
         "sourcemap_indexer.cli.indexing.enrich.run_enrich",
         lambda *_args, **_kwargs: right(EnrichReport(enriched=1, failed=0, skipped=0, errors=())),
@@ -628,3 +741,61 @@ def test_enrich_fails_on_non_md_import_path(
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
     assert result.exit_code != 0
+
+
+def test_enrich_runs_walk_before_enrich(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sourcemap_indexer.cli as cli_module
+    from sourcemap_indexer.application.enrich import EnrichReport
+    from sourcemap_indexer.application.sync import SyncReport
+    from sourcemap_indexer.lib.either import right
+
+    call_order: list[str] = []
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: right(None))
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_walk",
+        lambda *_a, **_kw: (call_order.append("walk"), right(0))[1],
+    )
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_sync",
+        lambda *_a, **_kw: (call_order.append("sync"), right(SyncReport(0, 0, 0, 0)))[1],
+    )
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_enrich",
+        lambda *_a, **_kw: (call_order.append("enrich"), right(EnrichReport(0, 0, 0, ())))[1],
+    )
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["enrich", "--root", str(tmp_path)])
+    assert "walk" in call_order
+    assert "enrich" in call_order
+    assert call_order.index("walk") < call_order.index("enrich")
+
+
+def test_enrich_shows_sync_insertions_from_pre_walk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sourcemap_indexer.cli as cli_module
+    from sourcemap_indexer.application.enrich import EnrichReport
+    from sourcemap_indexer.application.sync import SyncReport
+    from sourcemap_indexer.lib.either import right
+
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: right(None))
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_walk",
+        lambda *_a, **_kw: right(3),
+    )
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_sync",
+        lambda *_a, **_kw: right(SyncReport(inserted=3, updated=0, soft_deleted=0, unchanged=0)),
+    )
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_enrich",
+        lambda *_a, **_kw: right(EnrichReport(enriched=3, failed=0, skipped=0, errors=())),
+    )
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Inserted" in result.output

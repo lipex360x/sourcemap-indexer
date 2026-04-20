@@ -138,6 +138,40 @@ def test_walk_project_respects_default_ignores(tmp_path: Path) -> None:
     assert all("node_modules" not in p for p in paths)
 
 
+def test_walk_project_ignores_dotenv_by_default(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text("x = 1\n")
+    (tmp_path / ".env").write_text("SECRET=abc\n")
+    result = walk_project(tmp_path)
+    assert isinstance(result, Right)
+    paths = [f.path for f in result.value]
+    assert ".env" not in paths
+    assert "main.py" in paths
+
+
+def test_walk_project_ignores_docs_dir_via_extra_ignore(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text("x = 1\n")
+    docs = tmp_path / ".docs"
+    docs.mkdir()
+    (docs / "log.yaml").write_text("timestamp: now\n")
+    result = walk_project(tmp_path, extra_ignore=[".docs/"])
+    assert isinstance(result, Right)
+    paths = [f.path for f in result.value]
+    assert not any(p.startswith(".docs") for p in paths)
+    assert "main.py" in paths
+
+
+def test_walk_project_extra_ignore_excludes_custom_dir(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text("x = 1\n")
+    custom = tmp_path / ".myconfig"
+    custom.mkdir()
+    (custom / "index.db").write_text("")
+    result = walk_project(tmp_path, extra_ignore=[".myconfig/"])
+    assert isinstance(result, Right)
+    paths = [f.path for f in result.value]
+    assert not any(p.startswith(".myconfig") for p in paths)
+    assert "main.py" in paths
+
+
 def test_walk_project_respects_sourcemapignore(tmp_path: Path) -> None:
     (tmp_path / "main.py").write_text("x = 1\n")
     (tmp_path / "secret.py").write_text("token = 'abc'\n")
