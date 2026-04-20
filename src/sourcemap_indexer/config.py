@@ -33,3 +33,7 @@ def db_path(root: Path) -> Path:
 
 def index_yaml_path(root: Path) -> Path:
     return maps_dir(root) / "index.yaml"
+
+
+def logs_dir(root: Path) -> Path:
+    return maps_dir(root).parent / "logs"

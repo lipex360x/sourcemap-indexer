@@ -10,7 +10,8 @@ from typing import Any
 import httpx
 
 from sourcemap_indexer.domain.value_objects import Language, Layer, SideEffect, Stability
-from sourcemap_indexer.lib.either import Either, left, right
+from sourcemap_indexer.lib.either import Either, Right, left, right
+from sourcemap_indexer.lib.llm_log import LlmLog
 
 _SYSTEM_PROMPT = (
     "You are a code analyser. You receive a source file and return ONLY valid JSON, "
@@ -107,9 +108,15 @@ def _parse_enrichment(raw: str) -> Either[str, EnrichmentResult]:
 
 
 class LlamaClient:
-    def __init__(self, config: LlmConfig, http_client: httpx.Client | None = None) -> None:
+    def __init__(
+        self,
+        config: LlmConfig,
+        http_client: httpx.Client | None = None,
+        llm_log: LlmLog | None = None,
+    ) -> None:
         self._config = config
         self._http = http_client or httpx.Client(timeout=config.timeout_seconds)
+        self._llm_log = llm_log
 
     def _auth_headers(self) -> dict[str, str]:
         if self._config.api_key:
@@ -137,28 +144,49 @@ class LlamaClient:
         if extra_instruction:
             system = system + f"\n\nAdditional instruction: {extra_instruction}"
         user_prompt = f"Path: {path}\nLanguage: {language}\n\n---\n{content}"
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_prompt},
+        ]
         body = {
             "model": self._config.model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_prompt},
-            ],
+            "messages": messages,
             "temperature": self._config.temperature,
             "max_tokens": self._config.max_tokens,
         }
+
+        def _log(result: str, response_raw: str = "") -> None:
+            if self._llm_log is not None:
+                self._llm_log.record(
+                    path=path,
+                    language=str(language),
+                    model=self._config.model,
+                    messages=messages,
+                    response_raw=response_raw,
+                    result=result,
+                )
+
         try:
             response = self._http.post(self._config.url, json=body, headers=self._auth_headers())
         except httpx.TimeoutException:
+            _log("llm-timeout")
             return left("llm-timeout")
         except httpx.RequestError as error:
-            return left(f"llm-request-error: {error}")
+            result_code = f"llm-request-error: {error}"
+            _log(result_code)
+            return left(result_code)
 
         if response.status_code != 200:
-            return left(f"llm-http-error: {response.status_code}")
+            result_code = f"llm-http-error: {response.status_code}"
+            _log(result_code)
+            return left(result_code)
 
         try:
             raw = response.json()["choices"][0]["message"]["content"]
         except (KeyError, IndexError, json.JSONDecodeError):
+            _log("llm-parse-error")
             return left("llm-parse-error")
 
-        return _parse_enrichment(raw)
+        parsed = _parse_enrichment(raw)
+        _log("ok" if isinstance(parsed, Right) else parsed.error, raw)
+        return parsed
