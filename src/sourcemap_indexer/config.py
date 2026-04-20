@@ -36,4 +36,6 @@ def index_yaml_path(root: Path) -> Path:
 
 
 def logs_dir(root: Path) -> Path:
+    if os.environ.get("SOURCEMAP_MAPS_DIR", ""):
+        return maps_dir(root) / "logs"
     return maps_dir(root).parent / "logs"
