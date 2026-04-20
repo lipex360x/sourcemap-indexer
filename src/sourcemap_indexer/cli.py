@@ -196,6 +196,7 @@ def enrich(
         export_path.parent.mkdir(parents=True, exist_ok=True)
         export_path.write_text(custom_prompt or SYSTEM_PROMPT, encoding="utf-8")
         typer.echo(f"Prompt exported to {export_path}")
+        raise typer.Exit(0)
 
     if not is_llm_configured():
         _Console(stderr=True).print(
