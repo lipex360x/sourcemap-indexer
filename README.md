@@ -243,7 +243,6 @@ All commands are invoked as `sourcemap <command>`.
 | `--layer <layer>` | Filter by architectural layer |
 | `--language <lang>` | Filter by language |
 | `-m "<msg>"` | Inject an extra instruction into the LLM prompt |
-| `--export-prompt` | Export the default prompt to the maps directory for customisation |
 
 ### Exploration
 
@@ -299,16 +298,14 @@ All commands are invoked as `sourcemap <command>`.
 | `SOURCEMAP_LLM_LOG` | _(off)_ | Set to `1` to write LLM request/response logs to `logs/` inside the maps directory (or `.docs/logs/` when using the default location) |
 | `SOURCEMAP_PAGE_SIZE` | `20` | Number of pending files shown per page in `stats` |
 | `SOURCEMAP_MAPS_DIR` | `.docs/maps` | Output directory for `index.db` and `index.yaml` — relative to project root or absolute |
+| `SOURCEMAP_EXPORT_LLM_PROMPT` | _(off)_ | Path to a `.md` file — `enrich` writes the active prompt there before calling the LLM (useful to inspect or create a starting point for customisation) |
+| `SOURCEMAP_IMPORT_LLM_PROMPT` | _(off)_ | Path to a `.md` file — `enrich` reads it and sends its contents as the system prompt instead of the built-in default |
 
-### Custom LLM prompt
+> [!NOTE]
+> Both variables require a `.md` extension — `enrich` exits with an error if another extension is used.
 
-The system prompt sent to the LLM is file-based, not an env var. To customise it:
-
-```bash
-sourcemap enrich --export-prompt   # writes prompt.txt to the maps directory and exits
-```
-
-Edit `prompt.txt`, then run `enrich` normally — if the file exists it is used instead of the built-in default. Delete the file to revert to the default.
+> [!TIP]
+> Typical workflow: set `SOURCEMAP_EXPORT_LLM_PROMPT` once to dump the default prompt, edit the file, then point `SOURCEMAP_IMPORT_LLM_PROMPT` to it on subsequent runs.
 
 `sourcemap enrich` automatically reads a `.env` file from the project root before resolving env vars:
 
