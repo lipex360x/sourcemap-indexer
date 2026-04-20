@@ -50,9 +50,10 @@ Creates the directory structure needed by the other commands:
 ```
 your-project/
 ├── .docs/
-│   └── maps/
-│       ├── index.db          ← SQLite database (all metadata lives here)
-│       └── index.yaml        ← YAML snapshot of the last walk (intermediate file)
+│   ├── maps/
+│   │   ├── index.db          ← SQLite database (all metadata lives here)
+│   │   └── index.yaml        ← YAML snapshot of the last walk (intermediate file)
+│   └── logs/                 ← LLM debug logs (only when SOURCEMAP_LLM_LOG=1)
 └── .sourcemapignore          ← gitignore-syntax exclusion rules
 ```
 
@@ -134,6 +135,9 @@ After enrichment, `needs_llm` is cleared and `llm_hash` is set to the content ha
 > [!IMPORTANT]
 > Enrichment calls the LLM for every pending file. For large codebases, use `--limit N` to process in batches and avoid timeouts or rate limits.
 
+> [!NOTE]
+> Set `SOURCEMAP_LLM_LOG=1` to record every LLM request and response to a timestamped YAML file in `.docs/logs/`. Each `enrich` session produces one file (`llm-YYYYMMDD-HHMMSSffffff.yaml`) containing one YAML document per enriched file — useful for debugging prompts or auditing model output.
+
 [↑ back to top](#topo)
 
 ---
@@ -193,8 +197,11 @@ cd <your-project>
 sourcemap init    # create .docs/maps/, .sourcemapignore, index.db
 sourcemap walk    # scan files and sync into SQLite
 sourcemap enrich  # call LLM to annotate each file
-sourcemap stats   # overview: total, enriched, pending
+sourcemap stats   # auto-walks first, then shows totals and pending files
 ```
+
+> [!NOTE]
+> `sourcemap stats` automatically runs `walk` before displaying data — no need to run `walk` manually before `stats`.
 
 [↑ back to top](#topo)
 
@@ -228,7 +235,7 @@ sourcemap stats   # overview: total, enriched, pending
 | Command | Description |
 |---------|-------------|
 | `sourcemap profile` | Structural overview from walk data only — language distribution, inferred layers, test ratio, top files by size |
-| `sourcemap stats [--page N]` | Total, enriched, and pending counts by layer and language + pending file list |
+| `sourcemap stats [--page N]` | Auto-runs walk, then shows total/enriched/pending counts by layer and language; displays a `●○` progress bar that disappears (`transient`) before stats output is printed |
 | `sourcemap overview` | Layer × language matrix |
 | `sourcemap domain` | Enriched domain-layer files with their purpose |
 | `sourcemap effects` | Files with network or git side effects |
@@ -256,9 +263,10 @@ sourcemap stats   # overview: total, enriched, pending
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SOURCEMAP_LLM_URL` | `http://localhost:1234/v1/chat/completions` | LLM endpoint (any OpenAI-compatible API) |
+| `SOURCEMAP_LLM_URL` | _(required)_ | LLM endpoint (any OpenAI-compatible API) — `enrich` is blocked until this is set |
 | `SOURCEMAP_LLM_MODEL` | `qwen/qwen3-coder-30b` | Model name passed to the endpoint |
 | `SOURCEMAP_LLM_API_KEY` | _(empty)_ | Bearer token for authenticated providers |
+| `SOURCEMAP_LLM_LOG` | _(off)_ | Set to `1` to write LLM request/response logs to `.docs/logs/` |
 | `SOURCEMAP_PAGE_SIZE` | `20` | Number of pending files shown per page in `stats` |
 | `SOURCEMAP_MAPS_DIR` | `.docs/maps` | Output directory for `index.db` and `index.yaml` — relative to project root or absolute |
 
