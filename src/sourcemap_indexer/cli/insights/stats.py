@@ -96,13 +96,19 @@ def stats(
 
     pct = round(enriched / total * 100) if total else 0
     dot_filled = round(pct / 100 * 20)
+    bar_clr = _lang_color(pending)
     dot_bar = (
-        "[green]" + "●" * dot_filled + "[/green]" + "[dim]" + "○" * (20 - dot_filled) + "[/dim]"
+        f"[{bar_clr}]"
+        + "●" * dot_filled
+        + f"[/{bar_clr}]"
+        + "[dim]"
+        + "○" * (20 - dot_filled)
+        + "[/dim]"
     )
 
     if is_llm_configured():
         llm = from_environ()
-        llm_line = f"[bold]Model[/bold]  {llm.model}  [dim]({llm.url})[/dim]"
+        llm_line = f"[bold]LLM[/bold]    {llm.model}  [dim]({llm.url})[/dim]"
     else:
         llm_line = "[dim]LLM: not configured[/dim]"
 

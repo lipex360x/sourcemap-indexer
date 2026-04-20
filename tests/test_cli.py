@@ -188,6 +188,19 @@ def test_stats_shows_model_when_configured(tmp_path: Path, monkeypatch: pytest.M
     assert result.exit_code == 0
     assert "my-model" in result.output
     assert "myhost" in result.output
+    assert "LLM" in result.output
+
+
+def test_stats_header_label_is_llm_not_model(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "LLM" in result.output
+    assert "Model" not in result.output
 
 
 def test_stats_shows_project_root_in_header(
