@@ -27,11 +27,12 @@ from sourcemap_indexer.application.sync import run_sync
 from sourcemap_indexer.application.walk import run_walk
 from sourcemap_indexer.config import (
     db_path,
+    export_prompt_path,
     find_project_root,
+    import_prompt_path,
     index_yaml_path,
     logs_dir,
     maps_dir,
-    prompt_path,
 )
 from sourcemap_indexer.domain.value_objects import Language, Layer
 from sourcemap_indexer.infra.dotenv import load_dotenv
@@ -167,20 +168,29 @@ def enrich(
     language: str | None = typer.Option(None, "--language", help=_LANG_HELP),
     message: str | None = typer.Option(None, "-m", help="Extra instruction injected into prompt"),
     file: str | None = typer.Option(None, "--file", help=_FILE_HELP),
-    export_prompt: bool = typer.Option(
-        False, "--export-prompt", help="Export the default LLM prompt to maps dir and exit"
-    ),
 ) -> None:
     project_root = _resolve_root(root)
     load_dotenv(project_root / ".env")
 
-    pfile = prompt_path(project_root)
-    if export_prompt:
-        pfile.parent.mkdir(parents=True, exist_ok=True)
-        pfile.write_text(SYSTEM_PROMPT, encoding="utf-8")
-        typer.echo(f"Prompt exported to {pfile}")
-        typer.echo("Edit it, then run  sourcemap enrich  to use your custom prompt.")
-        raise typer.Exit(0)
+    import_result = import_prompt_path()
+    if isinstance(import_result, Left):
+        typer.echo(f"Error: {import_result.error}", err=True)
+        raise typer.Exit(1)
+    export_result = export_prompt_path()
+    if isinstance(export_result, Left):
+        typer.echo(f"Error: {export_result.error}", err=True)
+        raise typer.Exit(1)
+
+    import_path = import_result.value
+    custom_prompt = (
+        import_path.read_text(encoding="utf-8") if import_path and import_path.exists() else None
+    )
+
+    export_path = export_result.value
+    if export_path:
+        export_path.parent.mkdir(parents=True, exist_ok=True)
+        export_path.write_text(custom_prompt or SYSTEM_PROMPT, encoding="utf-8")
+        typer.echo(f"Prompt exported to {export_path}")
 
     if not is_llm_configured():
         _Console(stderr=True).print(
@@ -196,11 +206,10 @@ def enrich(
     repo = _open_repo(project_root)
     config = from_environ()
     llm_log = create_llm_log(logs_dir(project_root))
-    custom_prompt = pfile.read_text(encoding="utf-8") if pfile.exists() else None
     client = LlamaClient(config, llm_log=llm_log, system_prompt=custom_prompt)
     typer.echo(f"Model: {config.model}  ({config.url})")
-    if custom_prompt is not None:
-        typer.echo(f"Prompt: {pfile}")
+    if import_path is not None:
+        typer.echo(f"Prompt: {import_path}")
     if message:
         typer.echo(f"Instruction: {message}")
     ping_result = client.ping()

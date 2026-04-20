@@ -41,5 +41,21 @@ def logs_dir(root: Path) -> Path:
     return maps_dir(root).parent / "logs"
 
 
-def prompt_path(root: Path) -> Path:
-    return maps_dir(root) / "prompt.txt"
+def import_prompt_path() -> Either[str, Path | None]:
+    val = os.environ.get("SOURCEMAP_IMPORT_LLM_PROMPT", "")
+    if not val:
+        return right(None)
+    path = Path(val)
+    if path.suffix != ".md":
+        return left("import-prompt-must-be-md")
+    return right(path)
+
+
+def export_prompt_path() -> Either[str, Path | None]:
+    val = os.environ.get("SOURCEMAP_EXPORT_LLM_PROMPT", "")
+    if not val:
+        return right(None)
+    path = Path(val)
+    if path.suffix != ".md":
+        return left("export-prompt-must-be-md")
+    return right(path)
