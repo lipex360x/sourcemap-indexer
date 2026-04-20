@@ -617,6 +617,60 @@ def test_brief_stability_in_header(tmp_path: Path) -> None:
     assert "Stability" in result.output
 
 
+def test_brief_domain_excludes_init_files(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'domain/__init__.py', '__init__.py', 'py', 'domain', 'stable', "
+        "'pkg init', 0, 0, 'abc', 0, 0, 0)"
+    )
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (2, 'domain/entity.py', 'entity.py', 'py', 'domain', 'stable', "
+        "'the entity', 50, 500, 'def', 0, 0, 0)"
+    )
+    conn.commit()
+    conn.close()
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "domain/__init__.py" not in result.output
+    assert "domain/entity.py" in result.output
+
+
+def test_brief_invariants_excludes_test_layer(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'src/app.py', 'app.py', 'py', 'application', 'stable', "
+        "'the app', 50, 500, 'abc', 0, 0, 0)"
+    )
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (2, 'tests/test_app.py', 'test_app.py', 'py', 'test', 'stable', "
+        "'tests', 50, 500, 'def', 0, 0, 0)"
+    )
+    conn.execute(
+        "INSERT INTO invariants (item_id, position, invariant) VALUES (1, 0, 'system contract')"
+    )
+    conn.execute(
+        "INSERT INTO invariants (item_id, position, invariant) VALUES (2, 0, 'test convention')"
+    )
+    conn.commit()
+    conn.close()
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "system contract" in result.output
+    assert "test convention" not in result.output
+
+
 def test_reset_confirmed_deletes_db(tmp_path: Path) -> None:
     _init_sync(tmp_path)
     db_file = tmp_path / ".sourcemap" / "index.db"

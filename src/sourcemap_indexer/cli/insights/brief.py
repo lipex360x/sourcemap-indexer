@@ -22,11 +22,13 @@ _SQL_ARCHITECTURE = (
 )
 _SQL_DOMAIN = (
     "SELECT path, purpose FROM items "
-    "WHERE layer = 'domain' AND needs_llm = 0 AND deleted_at IS NULL ORDER BY path LIMIT 10"
+    "WHERE layer = 'domain' AND needs_llm = 0 AND deleted_at IS NULL "
+    "AND size_bytes > 100 ORDER BY path LIMIT 10"
 )
 _SQL_WORKFLOWS = (
     "SELECT path, purpose FROM items "
-    "WHERE layer = 'application' AND needs_llm = 0 AND deleted_at IS NULL ORDER BY path LIMIT 10"
+    "WHERE layer = 'application' AND needs_llm = 0 AND deleted_at IS NULL "
+    "AND size_bytes > 100 ORDER BY path LIMIT 10"
 )
 _SQL_EFFECTS = (
     "SELECT DISTINCT s.effect, COUNT(DISTINCT i.id) AS files FROM items i "
@@ -41,7 +43,8 @@ _SQL_TAGS = (
 _SQL_INVARIANTS = (
     "SELECT inv.invariant, COUNT(*) AS n FROM invariants inv "
     "JOIN items i ON i.id = inv.item_id "
-    "WHERE i.deleted_at IS NULL GROUP BY inv.invariant ORDER BY n DESC LIMIT 15"
+    "WHERE i.deleted_at IS NULL AND i.layer NOT IN ('test', 'doc', 'config') "
+    "GROUP BY inv.invariant ORDER BY n DESC LIMIT 15"
 )
 _SQL_UNSTABLE = (
     "SELECT path, stability FROM items "
