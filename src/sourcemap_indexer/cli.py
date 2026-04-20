@@ -27,7 +27,7 @@ from sourcemap_indexer.application.sync import run_sync
 from sourcemap_indexer.application.walk import run_walk
 from sourcemap_indexer.config import (
     db_path,
-    export_prompt_path,
+    default_prompt_export_path,
     find_project_root,
     import_prompt_path,
     index_yaml_path,
@@ -168,6 +168,12 @@ def enrich(
     language: str | None = typer.Option(None, "--language", help=_LANG_HELP),
     message: str | None = typer.Option(None, "-m", help="Extra instruction injected into prompt"),
     file: str | None = typer.Option(None, "--file", help=_FILE_HELP),
+    export_llm_prompt: bool = typer.Option(
+        False, "--export-llm-prompt", help="Write the active LLM prompt to a .md file"
+    ),
+    output: str | None = typer.Option(
+        None, "--output", help="Destination for --export-llm-prompt (default: maps dir)"
+    ),
 ) -> None:
     project_root = _resolve_root(root)
     load_dotenv(project_root / ".env")
@@ -176,18 +182,17 @@ def enrich(
     if isinstance(import_result, Left):
         typer.echo(f"Error: {import_result.error}", err=True)
         raise typer.Exit(1)
-    export_result = export_prompt_path()
-    if isinstance(export_result, Left):
-        typer.echo(f"Error: {export_result.error}", err=True)
-        raise typer.Exit(1)
 
     import_path = import_result.value
     custom_prompt = (
         import_path.read_text(encoding="utf-8") if import_path and import_path.exists() else None
     )
 
-    export_path = export_result.value
-    if export_path:
+    if export_llm_prompt:
+        export_path = Path(output) if output else default_prompt_export_path(project_root)
+        if export_path.suffix != ".md":
+            typer.echo("Error: --output must have a .md extension", err=True)
+            raise typer.Exit(1)
         export_path.parent.mkdir(parents=True, exist_ok=True)
         export_path.write_text(custom_prompt or SYSTEM_PROMPT, encoding="utf-8")
         typer.echo(f"Prompt exported to {export_path}")

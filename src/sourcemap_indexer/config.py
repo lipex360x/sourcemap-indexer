@@ -51,11 +51,5 @@ def import_prompt_path() -> Either[str, Path | None]:
     return right(path)
 
 
-def export_prompt_path() -> Either[str, Path | None]:
-    val = os.environ.get("SOURCEMAP_EXPORT_LLM_PROMPT", "")
-    if not val:
-        return right(None)
-    path = Path(val)
-    if path.suffix != ".md":
-        return left("export-prompt-must-be-md")
-    return right(path)
+def default_prompt_export_path(root: Path) -> Path:
+    return maps_dir(root) / "prompt.md"

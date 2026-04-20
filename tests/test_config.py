@@ -6,7 +6,7 @@ import pytest
 
 from sourcemap_indexer.config import (
     db_path,
-    export_prompt_path,
+    default_prompt_export_path,
     find_project_root,
     import_prompt_path,
     index_yaml_path,
@@ -118,25 +118,15 @@ def test_import_prompt_path_rejects_non_md(tmp_path: Path, monkeypatch: pytest.M
     assert result.error == "import-prompt-must-be-md"
 
 
-def test_export_prompt_path_none_when_not_set(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("SOURCEMAP_EXPORT_LLM_PROMPT", raising=False)
-    result = export_prompt_path()
-    assert isinstance(result, Right)
-    assert result.value is None
-
-
-def test_export_prompt_path_returns_path_when_set(
+def test_default_prompt_export_path_is_inside_maps_dir(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    out_file = tmp_path / "out.md"
-    monkeypatch.setenv("SOURCEMAP_EXPORT_LLM_PROMPT", str(out_file))
-    result = export_prompt_path()
-    assert isinstance(result, Right)
-    assert result.value == out_file
+    monkeypatch.delenv("SOURCEMAP_MAPS_DIR", raising=False)
+    assert default_prompt_export_path(tmp_path) == tmp_path / ".docs" / "maps" / "prompt.md"
 
 
-def test_export_prompt_path_rejects_non_md(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SOURCEMAP_EXPORT_LLM_PROMPT", str(tmp_path / "out.txt"))
-    result = export_prompt_path()
-    assert isinstance(result, Left)
-    assert result.error == "export-prompt-must-be-md"
+def test_default_prompt_export_path_follows_custom_maps_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SOURCEMAP_MAPS_DIR", "out/maps")
+    assert default_prompt_export_path(tmp_path) == tmp_path / "out" / "maps" / "prompt.md"

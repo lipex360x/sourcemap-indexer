@@ -459,29 +459,40 @@ def test_install_skill_creates_file(tmp_path: Path) -> None:
     assert "Skill installed" in result.output
 
 
-def test_enrich_exports_default_prompt_to_md_file(
+def test_enrich_export_llm_prompt_creates_default_md_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
-    export_file = tmp_path / "exported.md"
-    monkeypatch.setenv("SOURCEMAP_EXPORT_LLM_PROMPT", str(export_file))
     runner.invoke(app, ["init", "--root", str(tmp_path)])
-    runner.invoke(app, ["enrich", "--root", str(tmp_path)])
-    assert export_file.exists()
-    assert len(export_file.read_text()) > 0
+    runner.invoke(app, ["enrich", "--root", str(tmp_path), "--export-llm-prompt"])
+    default_file = tmp_path / ".docs" / "maps" / "prompt.md"
+    assert default_file.exists()
+    assert len(default_file.read_text()) > 0
 
 
-def test_enrich_export_prompt_content_matches_system_prompt(
+def test_enrich_export_llm_prompt_content_matches_system_prompt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from sourcemap_indexer.infra.llama_client import SYSTEM_PROMPT
 
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
-    export_file = tmp_path / "exported.md"
-    monkeypatch.setenv("SOURCEMAP_EXPORT_LLM_PROMPT", str(export_file))
     runner.invoke(app, ["init", "--root", str(tmp_path)])
-    runner.invoke(app, ["enrich", "--root", str(tmp_path)])
-    assert export_file.read_text(encoding="utf-8") == SYSTEM_PROMPT
+    runner.invoke(app, ["enrich", "--root", str(tmp_path), "--export-llm-prompt"])
+    default_file = tmp_path / ".docs" / "maps" / "prompt.md"
+    assert default_file.read_text(encoding="utf-8") == SYSTEM_PROMPT
+
+
+def test_enrich_export_llm_prompt_with_custom_output_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
+    out_file = tmp_path / "my-prompt.md"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(
+        app, ["enrich", "--root", str(tmp_path), "--export-llm-prompt", "--output", str(out_file)]
+    )
+    assert out_file.exists()
+    assert len(out_file.read_text()) > 0
 
 
 def test_enrich_uses_custom_prompt_from_import_env(
@@ -507,12 +518,19 @@ def test_enrich_uses_custom_prompt_from_import_env(
     assert "custom-prompt.md" in result.output
 
 
-def test_enrich_fails_on_non_md_export_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("SOURCEMAP_EXPORT_LLM_PROMPT", str(tmp_path / "out.txt"))
+def test_enrich_export_llm_prompt_fails_on_non_md_output(tmp_path: Path) -> None:
     runner.invoke(app, ["init", "--root", str(tmp_path)])
-    result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
+    result = runner.invoke(
+        app,
+        [
+            "enrich",
+            "--root",
+            str(tmp_path),
+            "--export-llm-prompt",
+            "--output",
+            str(tmp_path / "out.txt"),
+        ],
+    )
     assert result.exit_code != 0
 
 
