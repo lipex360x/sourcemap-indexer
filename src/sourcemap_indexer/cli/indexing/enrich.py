@@ -140,7 +140,8 @@ def _build_enrich_header(
     import_path: Path | None,
     message: str | None,
 ) -> str:
-    parts = [f"[bold]Model[/bold]  {config.model}  [dim]({config.url})[/dim]"]
+    connected = "  [green]●[/green] connected"
+    parts = [f"[bold]Model[/bold]  {config.model}  [dim]({config.url})[/dim]{connected}"]
     if import_path is not None:
         parts.append(f"[bold]Prompt[/bold]  {import_path}")
     if message:
@@ -195,7 +196,11 @@ def _run_enrich_session(
         return walk_result
     sync_result = run_sync(index_path, repo)
     pre_sync_report = sync_result.value if not isinstance(sync_result, Left) else None
-    prog.update(task_scan, visible=False)
+    if pre_sync_report is not None:
+        new_ct = pre_sync_report.inserted + pre_sync_report.updated
+        prog.update(task_scan, description=f"Sync  {new_ct} files to enrich", total=1, completed=1)
+    else:
+        prog.update(task_scan, total=1, completed=1)
     prog.update(task_enrich, visible=True)
 
     def _progress(path: str, success: bool, current: int, total: int) -> None:
@@ -251,7 +256,7 @@ def enrich(
     header = _build_enrich_header(config, import_path, message)
     index_path = index_yaml_path(project_root)
     prog = Progress(
-        SpinnerColumn(),
+        SpinnerColumn(finished_text="[green]✓[/green]"),
         TextColumn("[progress.description]{task.description}"),
         _HybridProgressColumn(),
         MofNCompleteColumn(),
