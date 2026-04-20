@@ -196,3 +196,23 @@ def test_sync_multiple_inserts(tmp_path: Path) -> None:
     result = run_sync(index, repo)
     assert isinstance(result, Right)
     assert result.value.inserted == 3
+
+
+def test_sync_calls_on_progress(tmp_path: Path) -> None:
+    repo = _make_repo()
+    index = tmp_path / "index.yaml"
+    entries = [_file_entry(f"f{i}.py", content_hash=chr(ord("a") + i) * 64) for i in range(3)]
+    _write_index(index, entries)
+    calls: list[tuple[int, int]] = []
+    run_sync(index, repo, on_progress=lambda cur, tot: calls.append((cur, tot)))
+    assert len(calls) == 3
+    assert calls[0] == (1, 3)
+    assert calls[-1] == (3, 3)
+
+
+def test_sync_on_progress_none_does_not_raise(tmp_path: Path) -> None:
+    repo = _make_repo()
+    index = tmp_path / "index.yaml"
+    _write_index(index, [_file_entry("f.py")])
+    result = run_sync(index, repo, on_progress=None)
+    assert isinstance(result, Right)
