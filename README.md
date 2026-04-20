@@ -235,7 +235,7 @@ sourcemap stats   # auto-walks first, then shows totals and pending files
 | Command | Description |
 |---------|-------------|
 | `sourcemap profile` | Structural overview from walk data only — language distribution, inferred layers, test ratio, top files by size |
-| `sourcemap stats [--page N]` | Auto-runs walk, then shows total/enriched/pending counts by layer and language; displays a `●○` progress bar that disappears (`transient`) before stats output is printed |
+| `sourcemap stats [--show] [--page N]` | Auto-runs walk, then shows total/enriched/pending counts by layer and language; add `--show` to list pending files, combine with `--page N` to paginate |
 | `sourcemap overview` | Layer × language matrix |
 | `sourcemap domain` | Enriched domain-layer files with their purpose |
 | `sourcemap effects` | Files with network or git side effects |
