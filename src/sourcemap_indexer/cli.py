@@ -277,7 +277,7 @@ def show(
 
 def _bar(value: int, maximum: int, width: int = 18) -> str:
     filled = round(value / maximum * width) if maximum else 0
-    return "█" * filled + "░" * (width - filled)
+    return "●" * filled + "○" * (width - filled)
 
 
 _STATS_HELP = (
@@ -347,47 +347,75 @@ def stats(
         by_layer[str(item.layer)] = by_layer.get(str(item.layer), 0) + 1
         by_lang[str(item.language)] = by_lang.get(str(item.language), 0) + 1
 
-    sep = "━" * 52
     pct = round(enriched / total * 100) if total else 0
-    prog_filled = round(pct / 100 * 20)
-    progress = "█" * prog_filled + "░" * (20 - prog_filled)
+    dot_filled = round(pct / 100 * 20)
+    dot_bar = (
+        "[green]" + "●" * dot_filled + "[/green]" + "[dim]" + "○" * (20 - dot_filled) + "[/dim]"
+    )
 
-    typer.echo(sep)
     if is_llm_configured():
         llm = from_environ()
-        typer.echo(f"  Model: {llm.model}  ({llm.url})")
+        llm_line = f"[bold]Model[/bold]  {llm.model}  [dim]({llm.url})[/dim]"
     else:
-        typer.echo("  LLM: not configured")
-    typer.echo(f"  Total: {total:<6}  Enriched: {enriched:<6}  Pending: {pending}")
-    typer.echo(f"  [{progress}] {pct}%")
-    typer.echo("")
+        llm_line = "[dim]LLM: not configured[/dim]"
+
+    summary = (
+        f"{llm_line}\n"
+        f"[bold]Total[/bold]: {total:<6}  [bold]Enriched[/bold]: {enriched:<6}"
+        f"  [bold]Pending[/bold]: {pending}\n"
+        f"{dot_bar}  {pct}%"
+    )
+    console.print(_Panel(summary, title="Stats", border_style="blue", title_align="left"))
 
     col = max((len(k) for k in by_layer), default=0)
     top = max(by_layer.values(), default=1)
-    typer.echo("  By layer")
-    for name, cnt in sorted(by_layer.items(), key=lambda x: -x[1]):
-        typer.echo(f"  {name:<{col}}  {cnt:>5}  {_bar(cnt, top)}")
-    typer.echo("")
+    layer_rows = "\n".join(
+        f"  {name:<{col}}  {cnt:>5}  [green]{_bar(cnt, top)}[/green]"
+        for name, cnt in sorted(by_layer.items(), key=lambda x: -x[1])
+    )
+    console.print(
+        _Panel(
+            layer_rows or "[dim](no data)[/dim]",
+            title="By layer",
+            border_style="blue",
+            title_align="left",
+        )
+    )
 
     col = max((len(k) for k in by_lang), default=0)
     top = max(by_lang.values(), default=1)
-    typer.echo("  By language")
-    for lang, cnt in sorted(by_lang.items(), key=lambda x: -x[1]):
-        typer.echo(f"  {lang:<{col}}  {cnt:>5}  {_bar(cnt, top)}")
+    lang_rows = "\n".join(
+        f"  {lang:<{col}}  {cnt:>5}  [green]{_bar(cnt, top)}[/green]"
+        for lang, cnt in sorted(by_lang.items(), key=lambda x: -x[1])
+    )
+    console.print(
+        _Panel(
+            lang_rows or "[dim](no data)[/dim]",
+            title="By language",
+            border_style="blue",
+            title_align="left",
+        )
+    )
 
     if show and pending_items:
         total_pages = math.ceil(pending / page_size)
         page = max(1, min(page, total_pages))
         start = (page - 1) * page_size
         page_slice = pending_items[start : start + page_size]
-        typer.echo("")
-        typer.echo(f"  Pending  (page {page}/{total_pages} · {pending} total)")
-        for item in page_slice:
-            typer.echo(f"  {item.language:<6}  {item.path}")
+        pending_rows = "\n".join(
+            f"  [dim]{item.language:<6}[/dim]  {item.path}" for item in page_slice
+        )
+        footer = f"\n  [dim]page {page}/{total_pages} · {pending} total[/dim]"
         if total_pages > 1:
-            typer.echo(f"  Use --page N to navigate (1–{total_pages})")
-
-    typer.echo(sep)
+            footer += f"  [dim]--page N to navigate (1–{total_pages})[/dim]"
+        console.print(
+            _Panel(
+                pending_rows + footer,
+                title="Pending",
+                border_style="yellow",
+                title_align="left",
+            )
+        )
 
 
 @app.command(help="List files whose content changed since the last enrich run.")
