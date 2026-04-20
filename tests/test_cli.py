@@ -248,8 +248,7 @@ def test_enrich_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
     monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
     monkeypatch.setattr(
-        cli_module,
-        "run_enrich",
+        "sourcemap_indexer.cli.indexing.enrich.run_enrich",
         lambda *_args, **_kwargs: right(
             EnrichReport(enriched=2, failed=0, skipped=1, errors=("warn",))
         ),
@@ -271,7 +270,10 @@ def test_enrich_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
     monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
     monkeypatch.setattr(cli_module.LlamaClient, "ping", lambda _self: right(None))
-    monkeypatch.setattr(cli_module, "run_enrich", lambda *_args, **_kwargs: left("llm-error"))
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_enrich",
+        lambda *_args, **_kwargs: left("llm-error"),
+    )
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
     assert result.exit_code != 0
@@ -515,8 +517,7 @@ def test_enrich_uses_custom_prompt_from_import_env(
     monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
     monkeypatch.setattr(cli_module.LlamaClient, "ping", lambda _self: right(None))
     monkeypatch.setattr(
-        cli_module,
-        "run_enrich",
+        "sourcemap_indexer.cli.indexing.enrich.run_enrich",
         lambda *_args, **_kwargs: right(EnrichReport(enriched=1, failed=0, skipped=0, errors=())),
     )
     import_file = tmp_path / "custom-prompt.md"

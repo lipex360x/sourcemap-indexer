@@ -68,8 +68,7 @@ def test_enrich_with_fake_client(project: Path, monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
     monkeypatch.setattr(cli_module.LlamaClient, "ping", lambda _self: right(None))
     monkeypatch.setattr(
-        cli_module,
-        "run_enrich",
+        "sourcemap_indexer.cli.indexing.enrich.run_enrich",
         lambda *_args, **_kwargs: right(EnrichReport(enriched=5, failed=0, skipped=0, errors=())),
     )
 
