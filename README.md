@@ -109,19 +109,34 @@ This file is checked in to source control optionally — it gives a plain-text a
 
 #### What you get without an LLM
 
-After `walk`, the database already holds language, line count, size, and hash for every file. Run `sourcemap profile` to turn that into a structural overview:
+After `walk`, the database already holds language, line count, size, and hash for every file. Run `sourcemap stats` to see the structural breakdown:
 
 ```
-Stack            py  46 files  4289 lines  ██████████████████
-                 sh   6 files   312 lines  ██
-Inferred layers  test       22 files  2456 lines
-                 infra      10 files   667 lines
-                 application 8 files   513 lines
-Test ratio       Source 27 / Tests 22   (ratio 1.29× — healthy)
-Top files        src/sourcemap_indexer/cli.py   500 lines
+╭─ Sync ──────────────────────────────────────────────────────────╮
+│ Inserted: 298   Updated: 0   Soft-deleted: 0                    │
+╰─────────────────────────────────────────────────────────────────╯
+╭─ Stats ─────────────────────────────────────────────────────────╮
+│ Root   /your/project                                            │
+│ LLM    not configured                                           │
+│ Total: 298      Enriched: 0      Pending: 298                   │
+│ ○○○○○○○○○○○○○○○○○○○○  0%                                        │
+╰─────────────────────────────────────────────────────────────────╯
+╭─ By layer ──────────────────────────────────────────────────────╮
+│   unknown   298  ○○○○○○○○○○○○○○○○○○○○                           │
+╰─────────────────────────────────────────────────────────────────╯
+╭─ By language ───────────────────────────────────────────────────╮
+│   py      114  ○○○○○○○○○○○○○○○○○○○○                             │
+│   tsx      46  ○○○○○○○○                                         │
+│   ts       43  ○○○○○○○○                                         │
+│   md        9  ○○                                               │
+│   sql       9  ○○                                               │
+│   yaml      8  ○                                                │
+│   json      7  ○                                                │
+╰─────────────────────────────────────────────────────────────────╯
+              ● all enriched  |  ● has pending  |  ○ not yet enriched
 ```
 
-Layers are inferred from directory names (`domain/`, `infra/`, `tests/`, …). For LLM-assigned layers, use `sourcemap overview` after `enrich`.
+All files start at layer `unknown` — layers are assigned by the LLM during `enrich`. Language detection is immediate and requires no enrichment.
 
 ### Phase 3 — `sourcemap enrich`
 
