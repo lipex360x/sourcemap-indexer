@@ -48,13 +48,17 @@ sourcemap stats   # overview: total, enriched, pending
 | Command | Description |
 |---------|-------------|
 | `sourcemap enrich [--limit N]` | Send pending files to the LLM (validates reachability first) |
+| `sourcemap enrich --force` | Re-enrich already enriched files (e.g. to fix language or layer) |
+| `sourcemap enrich --layer unknown` | Target only files in a specific layer |
+| `sourcemap enrich --language other` | Target only files in a specific language |
+| `sourcemap enrich -m "write in English"` | Inject an extra instruction into the LLM prompt |
 | `sourcemap stale` | List files whose content changed since the last enrich run |
 
 ### Exploration
 
 | Command | Description |
 |---------|-------------|
-| `sourcemap stats` | Total, enriched, and pending counts by layer and language |
+| `sourcemap stats [--page N]` | Total, enriched, and pending counts by layer and language + pending file list |
 | `sourcemap overview` | Layer × language matrix |
 | `sourcemap domain` | Enriched domain-layer files with their purpose |
 | `sourcemap effects` | Files with network or git side effects |

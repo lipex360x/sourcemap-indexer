@@ -51,7 +51,11 @@ Query the local SQLite index built by sourcemap-indexer to understand any projec
 | Command | When to use |
 |---------|-------------|
 | `sourcemap enrich [--limit N]` | Run LLM enrichment on pending files (validates LLM reachability first) |
-| `sourcemap stats` | Overview: total files, enriched count, pending count, by layer/language |
+| `sourcemap enrich --force` | Re-enrich already enriched files (e.g. to fix language or layer) |
+| `sourcemap enrich --layer <L>` | Target only files in a specific layer (useful for `unknown`) |
+| `sourcemap enrich --language <L>` | Target only files in a specific language |
+| `sourcemap enrich -m "<instruction>"` | Inject an extra instruction into the LLM prompt |
+| `sourcemap stats [--page N]` | Overview with pending file list (paginated, 20/page by default) |
 | `sourcemap overview` | Layer × language matrix — project structure at a glance |
 | `sourcemap domain` | Core business logic files (`layer=domain`, enriched only) |
 | `sourcemap effects` | Files with `network` or `git` side effects — I/O boundaries |
