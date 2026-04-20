@@ -127,6 +127,27 @@ def test_stats_shows_counts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     assert "LLM: not configured" in result.output
 
 
+def test_stats_auto_walks_new_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    (tmp_path / "app.py").write_text("x = 1\n")
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "app.py" in result.output
+
+
+def test_stats_auto_walk_shows_sync_summary_when_changed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["walk", "--root", str(tmp_path)])
+    (tmp_path / "new.py").write_text("y = 2\n")
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "inserted=1" in result.output
+
+
 def test_stats_shows_model_when_configured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://myhost/v1/chat/completions")
     monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "my-model")
@@ -170,9 +191,10 @@ def test_resolve_root_error_without_git(tmp_path: Path, monkeypatch: pytest.Monk
     assert result.exit_code != 0
 
 
-def test_open_repo_db_error(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["stats", "--root", str(tmp_path / "missing")])
-    assert result.exit_code != 0
+def test_stats_succeeds_on_empty_uninitialised_dir(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Total: 0" in result.output
 
 
 def test_enrich_fails_when_llm_not_configured(
