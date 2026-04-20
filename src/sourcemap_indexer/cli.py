@@ -248,7 +248,7 @@ def enrich(
     for error in report.errors:
         typer.echo(f"  ! {error}", err=True)
     typer.echo("")
-    stats(root=root, show=False, page=1)
+    stats(root=root, files=False, page=1)
 
 
 @app.command(help=_FIND_HELP)
@@ -307,9 +307,19 @@ def _bar(value: int, maximum: int, width: int = 18) -> str:
     return "●" * filled + "○" * (width - filled)
 
 
+def _lang_color(pending_count: int) -> str:
+    return "yellow" if pending_count > 0 else "green"
+
+
+def _proportional_width(count: int, max_count: int, max_width: int = 20) -> int:
+    if max_count == 0:
+        return 0
+    return max(1, round(count / max_count * max_width))
+
+
 _STATS_HELP = (
     "Show total, enriched, and pending counts broken down by layer and language."
-    " Add --show to list pending files (combine with --page N)."
+    " Add --files to list pending files (combine with --page N)."
     " Page size: SOURCEMAP_PAGE_SIZE (default 20)."
 )
 
@@ -317,8 +327,8 @@ _STATS_HELP = (
 @app.command(help=_STATS_HELP)
 def stats(
     root: str | None = typer.Option(None, help="Project root"),
-    show: bool = typer.Option(False, "--show", help="List pending files"),
-    page: int = typer.Option(1, "--page", help="Page of pending files (requires --show)"),
+    files: bool = typer.Option(False, "--files", help="List pending files"),
+    page: int = typer.Option(1, "--page", help="Page of pending files (requires --files)"),
 ) -> None:
     project_root = _resolve_root(root)
     load_dotenv(project_root / ".env")
@@ -370,9 +380,12 @@ def stats(
     pending = len(pending_items)
     by_layer: dict[str, int] = {}
     by_lang: dict[str, int] = {}
+    pending_by_lang: dict[str, int] = {}
     for item in items:
         by_layer[str(item.layer)] = by_layer.get(str(item.layer), 0) + 1
         by_lang[str(item.language)] = by_lang.get(str(item.language), 0) + 1
+        if item.needs_llm:
+            pending_by_lang[str(item.language)] = pending_by_lang.get(str(item.language), 0) + 1
 
     pct = round(enriched / total * 100) if total else 0
     dot_filled = round(pct / 100 * 20)
@@ -410,11 +423,15 @@ def stats(
     )
 
     col = max((len(k) for k in by_lang), default=0)
-    top = max(by_lang.values(), default=1)
-    lang_rows = "\n".join(
-        f"  {lang:<{col}}  {cnt:>5}  [green]{_bar(cnt, top)}[/green]"
-        for lang, cnt in sorted(by_lang.items(), key=lambda x: -x[1])
-    )
+    top_lang = max(by_lang.values(), default=1)
+    lang_row_list: list[str] = []
+    for lang, cnt in sorted(by_lang.items(), key=lambda x: -x[1]):
+        clr = _lang_color(pending_by_lang.get(lang, 0))
+        wid = _proportional_width(cnt, top_lang)
+        lang_row_list.append(
+            f"  {lang:<{col}}  {cnt:>5}  [{clr}]{_bar(cnt, top_lang, wid)}[/{clr}]"
+        )
+    lang_rows = "\n".join(lang_row_list)
     console.print(
         _Panel(
             lang_rows or "[dim](no data)[/dim]",
@@ -424,7 +441,7 @@ def stats(
         )
     )
 
-    if show and pending_items:
+    if files and pending_items:
         total_pages = math.ceil(pending / page_size)
         page = max(1, min(page, total_pages))
         start = (page - 1) * page_size

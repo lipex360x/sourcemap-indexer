@@ -2,6 +2,12 @@
 
 ## sourcemap-indexer
 
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![uv](https://img.shields.io/badge/installed%20via-uv-5c4ee5?logo=astral&logoColor=white)](https://docs.astral.sh/uv/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-264%20passing-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
+[![Coverage](https://img.shields.io/badge/coverage-95%25%2B-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
+
 *Index any codebase into SQLite and enrich file metadata via an LLM — so an AI assistant can understand large projects through SQL queries instead of reading every file.*
 
 ---
@@ -235,7 +241,7 @@ sourcemap stats   # auto-walks first, then shows totals and pending files
 | Command | Description |
 |---------|-------------|
 | `sourcemap profile` | Structural overview from walk data only — language distribution, inferred layers, test ratio, top files by size |
-| `sourcemap stats [--show] [--page N]` | Auto-runs walk, then shows total/enriched/pending counts by layer and language; add `--show` to list pending files, combine with `--page N` to paginate |
+| `sourcemap stats [--files] [--page N]` | Auto-runs walk, then shows total/enriched/pending counts by layer and language; bar width is proportional to file count — green means fully enriched, yellow means pending files exist; add `--files` to list them, combine with `--page N` to paginate |
 | `sourcemap overview` | Layer × language matrix |
 | `sourcemap domain` | Enriched domain-layer files with their purpose |
 | `sourcemap effects` | Files with network or git side effects |

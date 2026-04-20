@@ -7,7 +7,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from sourcemap_indexer.cli import app
+from sourcemap_indexer.cli import _lang_color, _proportional_width, app
 from sourcemap_indexer.lib.either import right
 
 runner = CliRunner()
@@ -116,6 +116,32 @@ def test_show_missing_path_exits_nonzero(tmp_path: Path) -> None:
     assert result.exit_code != 0
 
 
+def test_lang_color_yellow_when_pending() -> None:
+    assert _lang_color(1) == "yellow"
+    assert _lang_color(5) == "yellow"
+
+
+def test_lang_color_green_when_no_pending() -> None:
+    assert _lang_color(0) == "green"
+
+
+def test_proportional_width_max_count_gets_full_width() -> None:
+    assert _proportional_width(100, 100, 20) == 20
+
+
+def test_proportional_width_half_count_gets_half_width() -> None:
+    assert _proportional_width(50, 100, 20) == 10
+
+
+def test_proportional_width_small_count_minimum_one() -> None:
+    assert _proportional_width(1, 100, 20) == 1
+    assert _proportional_width(2, 114, 20) == 1
+
+
+def test_proportional_width_zero_max_returns_zero() -> None:
+    assert _proportional_width(0, 0, 20) == 0
+
+
 def test_stats_shows_counts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
     (tmp_path / "app.py").write_text("x = 1\n")
@@ -131,9 +157,15 @@ def test_stats_auto_walks_new_files(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     (tmp_path / "app.py").write_text("x = 1\n")
-    result = runner.invoke(app, ["stats", "--root", str(tmp_path), "--show"])
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path), "--files"])
     assert result.exit_code == 0
     assert "app.py" in result.output
+
+
+def test_stats_show_flag_rejected(tmp_path: Path) -> None:
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path), "--show"])
+    assert result.exit_code != 0
 
 
 def test_stats_auto_walk_shows_sync_summary_when_changed(
