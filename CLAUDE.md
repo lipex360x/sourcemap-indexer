@@ -1,5 +1,23 @@
 # CLAUDE.md — sourcemap-indexer
 
+## Local install
+
+The CLI is installed in editable mode — source changes reflect immediately without reinstalling:
+
+```bash
+uv tool install --editable .
+```
+
+## Development workflow — TDD mandatory
+
+All new behaviour must follow the Red → Green cycle:
+
+1. **RED** — write a failing test that describes the expected behaviour
+2. **GREEN** — write the minimum implementation to make it pass
+3. Repeat vertically per behaviour (never write all tests then all code)
+
+No implementation without a test first. Pre-commit enforces ≥95% coverage.
+
 ## Test runner
 
 ```bash
