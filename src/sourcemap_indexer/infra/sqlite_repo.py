@@ -59,6 +59,18 @@ class SqliteItemRepository:
         self._connection = connection
         self._connection.row_factory = sqlite3.Row
 
+    def close(self) -> None:
+        self._connection.close()
+
+    def __del__(self) -> None:
+        self._connection.close()
+
+    def __enter__(self) -> SqliteItemRepository:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.close()
+
     def upsert(self, item: Item) -> Either[str, Item]:
         try:
             with self._connection:

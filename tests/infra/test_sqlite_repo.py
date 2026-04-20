@@ -444,3 +444,19 @@ def test_llm_hash_round_trip() -> None:
     assert found.llm_at == 12345
     assert found.layer == Layer.DOMAIN
     assert found.stability == Stability.STABLE
+
+
+def test_close_does_not_raise() -> None:
+    repo = _make_repo()
+    repo.close()
+
+
+def test_context_manager_closes_on_exit() -> None:
+    with _make_repo() as repo:
+        assert repo is not None
+    repo._connection.close()
+
+
+def test_del_closes_connection() -> None:
+    repo = _make_repo()
+    del repo
