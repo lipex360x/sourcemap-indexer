@@ -190,6 +190,67 @@ def test_stats_shows_model_when_configured(tmp_path: Path, monkeypatch: pytest.M
     assert "myhost" in result.output
 
 
+def test_stats_shows_project_root_in_header(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Root" in result.output
+
+
+def test_enriched_bar_full_when_all_enriched() -> None:
+    from sourcemap_indexer.cli._rendering import _enriched_bar
+
+    assert _enriched_bar(3, 3, 3) == "●●●"
+
+
+def test_enriched_bar_empty_when_none_enriched() -> None:
+    from sourcemap_indexer.cli._rendering import _enriched_bar
+
+    assert _enriched_bar(0, 3, 3) == "○○○"
+
+
+def test_enriched_bar_partial_fill() -> None:
+    from sourcemap_indexer.cli._rendering import _enriched_bar
+
+    assert _enriched_bar(1, 2, 4) == "●●○○"
+
+
+def test_enriched_bar_single_enriched_shows_filled_dot() -> None:
+    from sourcemap_indexer.cli._rendering import _enriched_bar
+
+    assert _enriched_bar(1, 1, 1) == "●"
+
+
+def test_enriched_bar_zero_total_returns_empty_width() -> None:
+    from sourcemap_indexer.cli._rendering import _enriched_bar
+
+    assert _enriched_bar(0, 0, 3) == "○○○"
+
+
+def test_stats_by_language_shows_filled_bar_for_enriched_small_language(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
+    for idx in range(10):
+        (tmp_path / f"app{idx}.py").write_text(f"x = {idx}\n")
+    (tmp_path / "README.md").write_text("# readme\n")
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["walk", "--root", str(tmp_path)])
+    db_file = tmp_path / ".docs" / "maps" / "index.db"
+    conn = sqlite3.connect(str(db_file))
+    conn.execute("UPDATE items SET needs_llm = 0, llm_hash = content_hash WHERE language = 'md'")
+    conn.commit()
+    conn.close()
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    output_lines = result.output.splitlines()
+    md_line = next((line for line in output_lines if "md" in line and "●" in line), None)
+    assert md_line is not None, "expected filled bar for enriched md file"
+
+
 def test_stale_lists_items(tmp_path: Path) -> None:
     (tmp_path / "app.py").write_text("x = 1\n")
     runner.invoke(app, ["init", "--root", str(tmp_path)])

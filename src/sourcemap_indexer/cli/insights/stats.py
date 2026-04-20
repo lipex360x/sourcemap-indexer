@@ -11,8 +11,8 @@ from rich.progress import MofNCompleteColumn, Progress, SpinnerColumn, TextColum
 from sourcemap_indexer.application.sync import run_sync
 from sourcemap_indexer.application.walk import run_walk
 from sourcemap_indexer.cli._rendering import (
-    _bar,
     _DotBarColumn,
+    _enriched_bar,
     _lang_color,
     _proportional_width,
 )
@@ -85,11 +85,13 @@ def stats(
     pending = len(pending_items)
     by_layer: dict[str, int] = {}
     by_lang: dict[str, int] = {}
+    pending_by_layer: dict[str, int] = {}
     pending_by_lang: dict[str, int] = {}
     for item in items:
         by_layer[str(item.layer)] = by_layer.get(str(item.layer), 0) + 1
         by_lang[str(item.language)] = by_lang.get(str(item.language), 0) + 1
         if item.needs_llm:
+            pending_by_layer[str(item.layer)] = pending_by_layer.get(str(item.layer), 0) + 1
             pending_by_lang[str(item.language)] = pending_by_lang.get(str(item.language), 0) + 1
 
     pct = round(enriched / total * 100) if total else 0
@@ -105,6 +107,7 @@ def stats(
         llm_line = "[dim]LLM: not configured[/dim]"
 
     summary = (
+        f"[bold]Root[/bold]   {project_root}\n"
         f"{llm_line}\n"
         f"[bold]Total[/bold]: {total:<6}  [bold]Enriched[/bold]: {enriched:<6}"
         f"  [bold]Pending[/bold]: {pending}\n"
@@ -114,10 +117,14 @@ def stats(
 
     col = max((len(k) for k in by_layer), default=0)
     top = max(by_layer.values(), default=1)
-    layer_rows = "\n".join(
-        f"  {name:<{col}}  {cnt:>5}  [green]{_bar(cnt, top)}[/green]"
-        for name, cnt in sorted(by_layer.items(), key=lambda x: -x[1])
-    )
+    layer_row_list: list[str] = []
+    for name, cnt in sorted(by_layer.items(), key=lambda x: -x[1]):
+        clr = _lang_color(pending_by_layer.get(name, 0))
+        enriched_in_layer = cnt - pending_by_layer.get(name, 0)
+        wid_layer = _proportional_width(cnt, top)
+        bar_layer = _enriched_bar(enriched_in_layer, cnt, wid_layer)
+        layer_row_list.append(f"  {name:<{col}}  {cnt:>5}  [{clr}]{bar_layer}[/{clr}]")
+    layer_rows = "\n".join(layer_row_list)
     console.print(
         _Panel(
             layer_rows or "[dim](no data)[/dim]",
@@ -132,9 +139,10 @@ def stats(
     lang_row_list: list[str] = []
     for lang, cnt in sorted(by_lang.items(), key=lambda x: -x[1]):
         clr = _lang_color(pending_by_lang.get(lang, 0))
+        enriched_in_lang = cnt - pending_by_lang.get(lang, 0)
         wid = _proportional_width(cnt, top_lang)
         lang_row_list.append(
-            f"  {lang:<{col}}  {cnt:>5}  [{clr}]{_bar(cnt, top_lang, wid)}[/{clr}]"
+            f"  {lang:<{col}}  {cnt:>5}  [{clr}]{_enriched_bar(enriched_in_lang, cnt, wid)}[/{clr}]"
         )
     lang_rows = "\n".join(lang_row_list)
     console.print(
