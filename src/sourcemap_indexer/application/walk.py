@@ -9,9 +9,9 @@ from sourcemap_indexer.infra.walker import walk_project
 from sourcemap_indexer.lib.either import Either, Left, left, right
 
 
-def _output_dir_pattern(root: Path, output_path: Path) -> str | None:
+def _maps_dir_pattern(root: Path, output_path: Path) -> str | None:
     try:
-        return str(output_path.parent.parent.relative_to(root)) + "/"
+        return str(output_path.parent.relative_to(root)) + "/"
     except ValueError:
         return None
 
@@ -22,11 +22,15 @@ def run_walk(
     known_files: dict[str, tuple[int, int, int, str]] | None = None,
     extra_ignore: list[str] | None = None,
 ) -> Either[str, int]:
-    output_dir = _output_dir_pattern(root, output_path)
-    combined = list(extra_ignore or [])
-    if output_dir:
-        combined.append(output_dir)
-    walked_result = walk_project(root, known_files=known_files, extra_ignore=combined or None)
+    sourcemap_dir = output_path.parent
+    maps_pattern = _maps_dir_pattern(root, output_path)
+    combined = list(extra_ignore or []) + ([maps_pattern] if maps_pattern else [])
+    walked_result = walk_project(
+        root,
+        known_files=known_files,
+        extra_ignore=combined or None,
+        sourcemap_dir=sourcemap_dir,
+    )
     if isinstance(walked_result, Left):
         return walked_result
     walked = walked_result.value

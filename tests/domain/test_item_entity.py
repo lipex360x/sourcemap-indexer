@@ -9,7 +9,6 @@ from sourcemap_indexer.domain.value_objects import (
     ContentHash,
     ItemId,
     Language,
-    Layer,
     SideEffect,
     Stability,
 )
@@ -46,7 +45,7 @@ def sample_item(content_hash: ContentHash, item_id: ItemId) -> Item:
 
 def test_item_construction_defaults(sample_item: Item) -> None:
     assert sample_item.needs_llm is True
-    assert sample_item.layer == Layer.UNKNOWN
+    assert sample_item.layer == "unknown"
     assert sample_item.stability == Stability.UNKNOWN
     assert sample_item.tags == frozenset()
     assert sample_item.side_effects == frozenset()
@@ -78,7 +77,7 @@ def test_with_llm_enrichment_returns_updated_item(
 ) -> None:
     enriched = sample_item.with_llm_enrichment(
         purpose="Does something useful",
-        layer=Layer.APPLICATION,
+        layer="application",
         stability=Stability.STABLE,
         tags=frozenset({"feature", "utility"}),
         side_effects=frozenset({SideEffect.WRITES_FS}),
@@ -86,7 +85,7 @@ def test_with_llm_enrichment_returns_updated_item(
         llm_at=2000000,
     )
     assert enriched.purpose == "Does something useful"
-    assert enriched.layer == Layer.APPLICATION
+    assert enriched.layer == "application"
     assert enriched.stability == Stability.STABLE
     assert enriched.tags == frozenset({"feature", "utility"})
     assert enriched.side_effects == frozenset({SideEffect.WRITES_FS})
@@ -99,7 +98,7 @@ def test_with_llm_enrichment_returns_updated_item(
 def test_with_llm_enrichment_does_not_mutate_original(sample_item: Item) -> None:
     enriched = sample_item.with_llm_enrichment(
         purpose="test",
-        layer=Layer.APPLICATION,
+        layer="application",
         stability=Stability.STABLE,
         tags=frozenset(),
         side_effects=frozenset(),
@@ -114,7 +113,7 @@ def test_with_llm_enrichment_does_not_mutate_original(sample_item: Item) -> None
 def test_with_llm_enrichment_preserves_structural_fields(sample_item: Item) -> None:
     enriched = sample_item.with_llm_enrichment(
         purpose="test",
-        layer=Layer.APPLICATION,
+        layer="application",
         stability=Stability.STABLE,
         tags=frozenset(),
         side_effects=frozenset(),

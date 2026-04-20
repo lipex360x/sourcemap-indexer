@@ -13,6 +13,14 @@ from sourcemap_indexer.config import db_path, index_yaml_path, maps_dir
 _INSTALL_SKILL_HELP = "Install the skill file into an AI assistant's skills directory."
 
 
+def _maybe_backup(db_file: Path, output_dir: Path) -> None:
+    if db_file.exists() and typer.confirm("Backup current database?", default=True):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup = output_dir / f"index.{timestamp}.bak"
+        shutil.copy2(db_file, backup)
+        typer.echo(f"Backup saved: {backup.name}")
+
+
 @app.command(help="Delete the index (offers a timestamped backup before wiping).")
 def reset(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
@@ -29,11 +37,7 @@ def reset(root: str | None = typer.Option(None, help="Project root")) -> None:
     if not typer.confirm("Confirm reset?"):
         typer.echo("Cancelled.")
         return
-    if db_file.exists() and typer.confirm("Backup current database?", default=True):
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup = output_dir / f"index.{timestamp}.bak"
-        shutil.copy2(db_file, backup)
-        typer.echo(f"Backup saved: {backup.name}")
+    _maybe_backup(db_file, output_dir)
     if db_file.exists():
         db_file.unlink()
     if index_yaml.exists():

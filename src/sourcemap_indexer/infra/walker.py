@@ -39,12 +39,24 @@ def detect_language(path: Path) -> Language:
     return _EXT_MAP.get(path.suffix.lower(), Language.OTHER)
 
 
+def _resolve_sourcemapignore(root: Path, sourcemap_dir: Path | None) -> Path | None:
+    config_ignore = (sourcemap_dir / "ignore") if sourcemap_dir else None
+    if config_ignore is not None and config_ignore.exists():
+        return config_ignore
+    root_sourcemapignore = root / ".sourcemapignore"
+    if root_sourcemapignore.exists():
+        return root_sourcemapignore
+    return None
+
+
 def load_ignore_patterns(
     root: Path,
     extra_ignore: list[str] | None = None,
+    sourcemap_dir: Path | None = None,
 ) -> Either[str, pathspec.PathSpec]:
     patterns = list(DEFAULT_IGNORE) + list(extra_ignore or [])
-    for ignore_file in (root / ".gitignore", root / ".sourcemapignore"):
+    sourcemapignore = _resolve_sourcemapignore(root, sourcemap_dir)
+    for ignore_file in filter(None, (root / ".gitignore", sourcemapignore)):
         if ignore_file.exists():
             try:
                 patterns.extend(ignore_file.read_text(encoding="utf-8").splitlines())
@@ -57,58 +69,57 @@ def _count_lines(data: bytes) -> int:
     return len(data.decode(encoding="utf-8", errors="replace").splitlines())
 
 
+def _walk_file(
+    file_path: Path,
+    root: Path,
+    spec: pathspec.PathSpec,
+    known: dict[str, tuple[int, int, int, str]],
+) -> WalkedFile | None:
+    if not file_path.is_file() or file_path.is_symlink():
+        return None
+    relative = file_path.relative_to(root)
+    if spec.match_file(str(relative)):
+        return None
+    language = detect_language(file_path)
+    file_stat = file_path.stat()
+    mtime = int(file_stat.st_mtime)
+    size_bytes = file_stat.st_size
+    path_str = str(relative)
+    cached = known.get(path_str)
+    if cached is not None and cached[0] == mtime and cached[1] == size_bytes:
+        return WalkedFile(
+            path=path_str,
+            language=language,
+            lines=cached[2],
+            size_bytes=size_bytes,
+            content_hash=ContentHash(cached[3]),
+            last_modified=mtime,
+        )
+    data = file_path.read_bytes()
+    lines = _count_lines(data) if language != Language.OTHER else 0
+    return WalkedFile(
+        path=path_str,
+        language=language,
+        lines=lines,
+        size_bytes=len(data),
+        content_hash=hash_content(data),
+        last_modified=mtime,
+    )
+
+
 def walk_project(
     root: Path,
     known_files: dict[str, tuple[int, int, int, str]] | None = None,
     extra_ignore: list[str] | None = None,
+    sourcemap_dir: Path | None = None,
 ) -> Either[str, list[WalkedFile]]:
-    spec_result = load_ignore_patterns(root, extra_ignore=extra_ignore)
+    spec_result = load_ignore_patterns(root, extra_ignore=extra_ignore, sourcemap_dir=sourcemap_dir)
     if isinstance(spec_result, Left):
         return spec_result
     spec = spec_result.value
-
     try:
         all_paths = sorted(root.rglob("*"))
     except PermissionError as error:
         return left(f"walk-error: {error}")
     known = known_files if known_files is not None else {}
-    walked: list[WalkedFile] = []
-    for file_path in all_paths:
-        if not file_path.is_file():
-            continue
-        if file_path.is_symlink():
-            continue
-        relative = file_path.relative_to(root)
-        if spec.match_file(str(relative)):
-            continue
-        language = detect_language(file_path)
-        file_stat = file_path.stat()
-        mtime = int(file_stat.st_mtime)
-        size_bytes = file_stat.st_size
-        path_str = str(relative)
-        cached = known.get(path_str)
-        if cached is not None and cached[0] == mtime and cached[1] == size_bytes:
-            walked.append(
-                WalkedFile(
-                    path=path_str,
-                    language=language,
-                    lines=cached[2],
-                    size_bytes=size_bytes,
-                    content_hash=ContentHash(cached[3]),
-                    last_modified=mtime,
-                )
-            )
-        else:
-            data = file_path.read_bytes()
-            lines = _count_lines(data) if language != Language.OTHER else 0
-            walked.append(
-                WalkedFile(
-                    path=path_str,
-                    language=language,
-                    lines=lines,
-                    size_bytes=len(data),
-                    content_hash=hash_content(data),
-                    last_modified=mtime,
-                )
-            )
-    return right(walked)
+    return right(list(filter(None, (_walk_file(p, root, spec, known) for p in all_paths))))

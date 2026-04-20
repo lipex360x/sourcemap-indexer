@@ -26,7 +26,7 @@ class Item:
     has_test: bool | None = None
     test_path: str | None = None
     purpose: str | None = None
-    layer: Layer = Layer.UNKNOWN
+    layer: Layer = "unknown"
     stability: Stability = Stability.UNKNOWN
     tags: frozenset[str] = frozenset()
     side_effects: frozenset[SideEffect] = frozenset()

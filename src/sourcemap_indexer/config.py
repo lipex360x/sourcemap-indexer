@@ -5,7 +5,7 @@ from pathlib import Path
 
 from sourcemap_indexer.lib.either import Either, left, right
 
-_DEFAULT_MAPS_DIR = ".docs/maps"
+_DEFAULT_MAPS_DIR = ".sourcemap"
 
 
 def find_project_root(start: Path) -> Either[str, Path]:
@@ -36,9 +36,7 @@ def index_yaml_path(root: Path) -> Path:
 
 
 def logs_dir(root: Path) -> Path:
-    if os.environ.get("SOURCEMAP_MAPS_DIR", ""):
-        return maps_dir(root) / "logs"
-    return maps_dir(root).parent / "logs"
+    return maps_dir(root) / "logs"
 
 
 def import_prompt_path() -> Either[str, Path | None]:

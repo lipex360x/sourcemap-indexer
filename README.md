@@ -5,8 +5,10 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/installed%20via-uv-5c4ee5?logo=astral&logoColor=white)](https://docs.astral.sh/uv/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-264%20passing-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
+[![Tests](https://img.shields.io/badge/tests-335%20passing-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
 [![Coverage](https://img.shields.io/badge/coverage-95%25%2B-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![mypy](https://img.shields.io/badge/mypy-strict-blue)](https://mypy.readthedocs.io/)
 
 *Index any codebase into SQLite and enrich file metadata via an LLM — so an AI assistant can understand large projects through SQL queries instead of reading every file.*
 
@@ -23,11 +25,13 @@
 | 5 | [Commands](#commands) |
 | 6 | [Environment variables](#env) |
 | 7 | [Ignoring files](#ignoring) |
-| 8 | [Plugging in a different LLM](#llm) |
-| 9 | [AI assistant skill](#skill) |
-| 10 | [Post-commit hook](#hook) |
-| 11 | [SQLite schema](#schema) |
-| 12 | [Dev setup](#dev) |
+| 8 | [Custom layers](#layers) |
+| 9 | [Plugging in a different LLM](#llm) |
+| 10 | [AI assistant skill](#skill) |
+| 11 | [Post-commit hook](#hook) |
+| 12 | [SQLite schema](#schema) |
+| 13 | [Dev setup](#dev) |
+| 14 | [Code quality](#quality) |
 
 ---
 
@@ -55,16 +59,16 @@ Creates the directory structure needed by the other commands:
 
 ```
 your-project/
-├── .docs/
-│   ├── maps/
-│   │   ├── index.db          ← SQLite database (all metadata lives here)
-│   │   └── index.yaml        ← YAML snapshot of the last walk (intermediate file)
-│   └── logs/                 ← LLM debug logs (only when SOURCEMAP_LLM_LOG=1; inside SOURCEMAP_MAPS_DIR if set)
-└── .sourcemapignore          ← gitignore-syntax exclusion rules
+├── .sourcemap/
+│   ├── index.db          ← SQLite database (all metadata lives here)
+│   ├── index.yaml        ← YAML snapshot of the last walk (intermediate file)
+│   ├── layers.yaml       ← user-defined layer names (optional)
+│   └── logs/             ← LLM debug logs (only when SOURCEMAP_LLM_LOG=1)
+└── .sourcemapignore      ← gitignore-syntax exclusion rules
 ```
 
 > [!NOTE]
-> The output directory defaults to `.docs/maps/` and can be changed via `SOURCEMAP_MAPS_DIR`. See [Environment variables](#env).
+> The output directory defaults to `.sourcemap/` and can be changed via `SOURCEMAP_MAPS_DIR`. See [Environment variables](#env).
 
 > [!NOTE]
 > `init` is idempotent — safe to run multiple times. It never overwrites an existing `.sourcemapignore` or database.
@@ -74,7 +78,7 @@ your-project/
 Scans the project tree and updates the database in three internal steps:
 
 1. **Scan** — traverses all files (respecting `.gitignore` and `.sourcemapignore`), collects path, language, line count, size, content hash, and last-modified timestamp. On the second and subsequent runs, files whose `mtime` and `size` match the SQLite record are skipped entirely — only changed files are read and re-hashed. This makes `walk` scale to large codebases: a 10 000-file tree with 5 changed files reads 5 files instead of 10 000.
-2. **Write** — serializes the result to `index.yaml` inside the maps directory (human-readable snapshot of every tracked file; planned for removal in a future release once SQLite becomes the sole source of truth)
+2. **Write** — serializes the result to `index.yaml` inside `.sourcemap/` (human-readable snapshot of every tracked file; planned for removal in a future release once SQLite becomes the sole source of truth)
 3. **Sync** — reads `index.yaml` and reconciles the SQLite database:
    - New file → inserted with `needs_llm = true`
    - File changed (hash diff) → updated with `needs_llm = true`
@@ -142,7 +146,7 @@ After enrichment, `needs_llm` is cleared and `llm_hash` is set to the content ha
 > Enrichment calls the LLM for every pending file. For large codebases, use `--limit N` to process in batches and avoid timeouts or rate limits.
 
 > [!NOTE]
-> Set `SOURCEMAP_LLM_LOG=1` to record every LLM request and response to a timestamped YAML file. Logs land in `.docs/logs/` by default, or inside the directory set by `SOURCEMAP_MAPS_DIR` when customized. Each `enrich` session produces one file (`llm-YYYYMMDD-HHMMSSffffff.yaml`) containing one YAML document per enriched file — useful for debugging prompts or auditing model output.
+> Set `SOURCEMAP_LLM_LOG=1` to record every LLM request and response to a timestamped YAML file. Logs land in `.sourcemap/logs/` by default (or inside the directory set by `SOURCEMAP_MAPS_DIR`). Each `enrich` session produces one file (`llm-YYYYMMDD-HHMMSSffffff.yaml`) containing one YAML document per enriched file — useful for debugging prompts or auditing model output.
 
 [↑ back to top](#top)
 
@@ -163,6 +167,42 @@ After enrichment, `needs_llm` is cleared and `llm_hash` is set to the content ha
 
 > [!IMPORTANT]
 > `sourcemap enrich` calls an LLM. Without a reachable endpoint (`SOURCEMAP_LLM_URL`), walk and stats work fine — only enrichment is blocked.
+
+### Installing uv
+
+**macOS**
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Or via Homebrew:
+
+```bash
+brew install uv
+```
+
+**Linux**
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Add `~/.local/bin` to your `PATH` if not already present (the installer will prompt you).
+
+**Windows**
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Or via WinGet:
+
+```powershell
+winget install --id=astral-sh.uv -e
+```
+
+After installation, restart your terminal and verify with `uv --version`.
 
 [↑ back to top](#top)
 
@@ -200,7 +240,7 @@ The binary lives at `~/.local/bin/sourcemap`. The tool environment is at `~/.loc
 
 ```bash
 cd <your-project>
-sourcemap init    # create .docs/maps/, .sourcemapignore, index.db
+sourcemap init    # create .sourcemap/, .sourcemapignore, index.db
 sourcemap walk    # scan files and sync into SQLite
 sourcemap enrich  # call LLM to annotate each file
 sourcemap stats   # auto-walks first, then shows totals and pending files
@@ -250,6 +290,7 @@ All commands are invoked as `sourcemap <command>`.
 
 | Command | Description |
 |---------|-------------|
+| `brief` | Single-call project briefing — architecture, domain files, tags, side effects, risk areas |
 | `profile` | Language distribution, inferred layers, test ratio, top files by size |
 | `stats` | Auto-runs walk; counts by layer and language; bar width = relative file count; green = enriched, yellow = pending |
 | `overview` | Layer × language matrix |
@@ -297,9 +338,9 @@ All commands are invoked as `sourcemap <command>`.
 | `SOURCEMAP_LLM_URL` | _(required)_ | LLM endpoint (any OpenAI-compatible API) — `enrich` is blocked until this is set |
 | `SOURCEMAP_LLM_MODEL` | _(required)_ | Model name passed to the endpoint — `enrich` is blocked until this is set |
 | `SOURCEMAP_LLM_API_KEY` | _(empty)_ | Bearer token for authenticated providers |
-| `SOURCEMAP_LLM_LOG` | _(off)_ | Set to `1` to write LLM request/response logs to `logs/` inside the maps directory (or `.docs/logs/` when using the default location) |
+| `SOURCEMAP_LLM_LOG` | _(off)_ | Set to `1` to write LLM request/response logs to `logs/` inside the maps directory |
 | `SOURCEMAP_PAGE_SIZE` | `20` | Number of pending files shown per page in `stats` |
-| `SOURCEMAP_MAPS_DIR` | `.docs/maps` | Output directory for `index.db` and `index.yaml` — relative to project root or absolute |
+| `SOURCEMAP_MAPS_DIR` | `.sourcemap` | Output directory for `index.db`, `index.yaml`, `layers.yaml`, and logs — relative to project root or absolute |
 | `SOURCEMAP_IMPORT_LLM_PROMPT` | _(off)_ | Path to a `.md` file — `enrich` reads it and sends its contents as the system prompt instead of the built-in default. Must have `.md` extension |
 
 > [!TIP]
@@ -333,7 +374,7 @@ SOURCEMAP_LLM_API_KEY=your-api-key
 ```
 node_modules/   .git/         .venv/        __pycache__/
 dist/           build/        .next/        .turbo/
-coverage/       .docs/maps/   *.pyc         *.min.js
+coverage/       .sourcemap/   *.pyc         *.min.js
 *.lock          *.db          *.sqlite      *.map
 ```
 
@@ -373,9 +414,34 @@ Pattern rules:
 
 ---
 
+<a id="layers"></a>
+
+## 8. Custom layers
+
+By default, the LLM assigns one of the built-in layers (`domain`, `infra`, `application`, `cli`, `lib`, `config`, `hook`, `doc`, `test`, `unknown`). If your project uses a different architecture, you can declare additional layer names in `.sourcemap/layers.yaml`:
+
+```yaml
+layers:
+  - presentation
+  - gateway
+  - jobs
+```
+
+`sourcemap init` creates the file with a commented-out example. Any layer name listed here is treated as valid — the LLM can assign it and `find --layer` will match it.
+
+> [!NOTE]
+> Built-in layers always remain valid. `layers.yaml` only adds names; it does not replace the defaults.
+
+> [!TIP]
+> After adding new layers, run `sourcemap enrich --force --layer unknown` to re-classify files that were previously unrecognised.
+
+[↑ back to top](#top)
+
+---
+
 <a id="llm"></a>
 
-## 8. Plugging in a different LLM
+## 9. Plugging in a different LLM
 
 The enrichment client targets any OpenAI-compatible endpoint:
 
@@ -404,7 +470,7 @@ sourcemap enrich --limit 10
 
 <a id="skill"></a>
 
-## 9. AI assistant skill
+## 10. AI assistant skill
 
 Install the bundled skill file so your AI assistant can query the index directly:
 
@@ -422,7 +488,7 @@ sourcemap install-skill --target <your-tool-skills-dir>
 
 <a id="hook"></a>
 
-## 10. Post-commit hook (auto-walk on every commit)
+## 11. Post-commit hook (auto-walk on every commit)
 
 ```bash
 bash scripts/bash/install-hook.sh
@@ -439,7 +505,7 @@ Installs a `post-commit` hook that runs `sourcemap walk` after every commit, kee
 
 <a id="schema"></a>
 
-## 11. SQLite schema
+## 12. SQLite schema
 
 One core table (`items`) holds a row per file. Three satellite tables store the multi-valued LLM output (a file has many tags, many side effects, many invariants):
 
@@ -482,7 +548,7 @@ erDiagram
 **Walk fills**: `path`, `name`, `language`, `lines`, `size_bytes`, `content_hash`, `needs_llm`, `deleted_at`.
 **Enrich fills**: `purpose`, `layer`, `stability`, `llm_hash`, `llm_at`, plus rows in `tags` / `side_effects` / `invariants`.
 
-Layers: `domain | infra | application | cli | hook | lib | config | doc | test | unknown`
+Layers: `domain | infra | application | cli | hook | lib | config | doc | test | unknown` — plus any user-defined names declared in `.sourcemap/layers.yaml`
 
 Side effects: `writes_fs | spawns_process | network | git | environ`
 
@@ -492,7 +558,7 @@ Side effects: `writes_fs | spawns_process | network | git | environ`
 
 <a id="dev"></a>
 
-## 12. Dev setup
+## 13. Dev setup
 
 ```bash
 git clone https://github.com/lipex360x/sourcemap-indexer.git
@@ -500,5 +566,46 @@ cd sourcemap-indexer
 uv sync
 uv run pytest
 ```
+
+[↑ back to top](#top)
+
+---
+
+<a id="quality"></a>
+
+## 14. Code quality
+
+Every commit passes a pre-commit pipeline that enforces the following gates:
+
+### Automated gates (pre-commit / pre-push)
+
+| Tool | What it checks | Config |
+|------|---------------|--------|
+| **ruff** | Style, imports, simplification (`SIM`), returns (`RET`), bugbear (`B`), upgrades (`UP`) | `pyproject.toml [tool.ruff.lint]` |
+| **ruff format** | Consistent formatting (replaces Black) | `pyproject.toml [tool.ruff]` |
+| **McCabe complexity** | No function exceeds cyclomatic complexity 5 (`C901`) | `pyproject.toml [tool.ruff.lint.mccabe]` |
+| **mypy** | Full strict type checking — no `Any`, no untyped functions | `pyproject.toml [tool.mypy]` |
+| **bandit** | Security scan for common vulnerabilities | `pyproject.toml [tool.bandit]` |
+| **vulture** | Dead code detection — unused functions and variables | — |
+| **pylint C0103** | Naming convention enforcement — no abbreviations (`msg`, `cfg`, `err`, …) | `pyproject.toml [tool.pylint]` |
+| **pytest + coverage** | Test suite must pass at ≥ 95% line coverage | `pyproject.toml [tool.pytest]` |
+
+### Testing strategy
+
+- **TDD mandatory** — every behaviour is covered by a test written before the implementation (Red → Green)
+- **No mocks on persistence** — tests hit a real in-memory SQLite database (`":memory:"`)
+- **No mocks on the filesystem** — tests use `tmp_path` fixtures with real files
+- **Integration tests** run the full CLI via `typer.testing.CliRunner` end-to-end
+- **Coverage minimum: 95%** — enforced both by pytest and by the pre-push hook
+
+### Design decisions
+
+| Decision | Why |
+|----------|-----|
+| `Either[str, T]` monad | Explicit error propagation without exceptions — every fallible function returns `Left(error_token)` or `Right(value)`. No hidden control flow. |
+| `Layer = str` (not StrEnum) | User-defined layers loaded from `layers.yaml` are unknown at import time. A `str` alias accepts any value; validation happens at the application boundary in `run_enrich`. |
+| No comments in source | Names carry meaning. Comments that explain *what* code does rot as code evolves; the only permitted comments are for non-obvious *why* — hidden constraints, workarounds, subtle invariants. |
+| Single output directory (`.sourcemap/`) | Config (`layers.yaml`, `ignore`) and data (`index.db`, `index.yaml`, `logs/`) live under one root. No two directories for the same concern. |
+| `_DEFAULT_LAYERS \| user_layers` | The full valid-layer set is the union of built-in defaults and user-defined additions, computed at startup and passed through to `run_enrich` and `LlmClient`. |
 
 [↑ back to top](#top)

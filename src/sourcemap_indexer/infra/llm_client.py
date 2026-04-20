@@ -9,25 +9,39 @@ from typing import Any
 
 import httpx
 
-from sourcemap_indexer.domain.value_objects import Language, Layer, SideEffect, Stability
-from sourcemap_indexer.lib.either import Either, Right, left, right
+from sourcemap_indexer.domain.value_objects import (
+    _DEFAULT_LAYERS,
+    Language,
+    Layer,
+    SideEffect,
+    Stability,
+)
+from sourcemap_indexer.lib.either import Either, Left, Right, left, right
 from sourcemap_indexer.lib.llm_log import LlmLog
 
-SYSTEM_PROMPT = (
-    "You are a code analyser. You receive a source file and return ONLY valid JSON, "
-    "no markdown fence, no extra text, no comments. The JSON follows THIS exact schema:\n\n"
-    '{"purpose": "string — 1 to 2 sentences in English describing WHAT the file does and '
-    'WHY it exists. No implementation details.", '
-    '"tags": ["array of 3 to 7 kebab-case strings — semantic concepts, not obvious technologies"], '
-    '"layer": "domain | infra | application | cli | hook | lib | config | doc | test | unknown", '
-    '"stability": "one of: core | stable | experimental | deprecated | unknown", '
-    '"side_effects": ["zero or more of: writes_fs | spawns_process | network | git | environ"], '
-    '"invariants": ["zero to three short strings — critical constraints"]}\n\n'
-    "Hard rules:\n"
-    "- Reply with ONLY the JSON object. Zero text before or after.\n"
-    '- If unsure about a field, use "unknown" (enums) or empty array.\n'
-    "- Never include credentials or absolute paths in purpose/tags."
-)
+
+def build_system_prompt(valid_layers: frozenset[str]) -> str:
+    layers_str = " | ".join(sorted(valid_layers))
+    return (
+        "You are a code analyser. You receive a source file and return ONLY valid JSON, "
+        "no markdown fence, no extra text, no comments. The JSON follows THIS exact schema:\n\n"
+        '{"purpose": "string — 1 to 2 sentences in English describing WHAT the file does '
+        'and WHY it exists. No implementation details.", '
+        '"tags": ["array of 3 to 7 kebab-case strings — semantic concepts, '
+        'not obvious technologies"], '
+        f'"layer": "one of: {layers_str}", '
+        '"stability": "one of: core | stable | experimental | deprecated | unknown", '
+        '"side_effects": '
+        '["zero or more of: writes_fs | spawns_process | network | git | environ"], '
+        '"invariants": ["zero to three short strings — critical constraints"]}\n\n'
+        "Hard rules:\n"
+        "- Reply with ONLY the JSON object. Zero text before or after.\n"
+        '- If unsure about a field, use "unknown" (enums) or empty array.\n'
+        "- Never include credentials or absolute paths in purpose/tags."
+    )
+
+
+SYSTEM_PROMPT = build_system_prompt(_DEFAULT_LAYERS)
 
 _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -77,25 +91,28 @@ def _truncate(content: str, max_chars: int) -> str:
     return content[:head] + f"\n... [truncated {skipped} chars] ...\n" + content[-tail:]
 
 
+def _try_parse_json(text: str) -> dict[str, Any] | None:
+    try:
+        return json.loads(text)  # type: ignore[no-any-return]
+    except json.JSONDecodeError:
+        match = _JSON_BLOCK_RE.search(text)
+        if not match:
+            return None
+        try:
+            return json.loads(match.group())  # type: ignore[no-any-return]
+        except json.JSONDecodeError:
+            return None
+
+
 def _parse_enrichment(raw: str) -> Either[str, EnrichmentResult]:
     text = raw.strip()
     if text.startswith("```"):
         text = "\n".join(line for line in text.splitlines() if not line.startswith("```")).strip()
-    try:
-        data: dict[str, Any] = json.loads(text)
-    except json.JSONDecodeError:
-        match = _JSON_BLOCK_RE.search(text)
-        if not match:
-            return left("llm-parse-error")
-        try:
-            data = json.loads(match.group())
-        except json.JSONDecodeError:
-            return left("llm-parse-error")
+    data = _try_parse_json(text)
+    if data is None:
+        return left("llm-parse-error")
 
-    try:
-        layer = Layer(data.get("layer", "unknown"))
-    except ValueError:
-        layer = Layer.UNKNOWN
+    layer: Layer = str(data.get("layer", "unknown"))
 
     try:
         stability = Stability(data.get("stability", "unknown"))
@@ -126,11 +143,17 @@ class LlmClient:
         http_client: httpx.Client | None = None,
         llm_log: LlmLog | None = None,
         system_prompt: str | None = None,
+        valid_layers: frozenset[str] | None = None,
     ) -> None:
         self._config = config
         self._http = http_client or httpx.Client(timeout=config.timeout_seconds)
         self._llm_log = llm_log
-        self._system_prompt = system_prompt if system_prompt is not None else SYSTEM_PROMPT
+        if system_prompt is not None:
+            self._system_prompt = system_prompt
+        elif valid_layers is not None:
+            self._system_prompt = build_system_prompt(valid_layers)
+        else:
+            self._system_prompt = SYSTEM_PROMPT
 
     def _auth_headers(self) -> dict[str, str]:
         if self._config.api_key:
@@ -144,6 +167,84 @@ class LlmClient:
         except httpx.RequestError as error:
             return left(f"llm-unreachable: {error}")
         return right(None)
+
+    def _log(
+        self,
+        path: str,
+        language: Language,
+        messages: list[dict[str, str]],
+        result: str,
+        response_raw: str = "",
+        finish_reason: str = "",
+    ) -> None:
+        if self._llm_log is not None:
+            self._llm_log.record(
+                path=path,
+                language=str(language),
+                model=self._config.model,
+                messages=messages,
+                response_raw=response_raw,
+                result=result,
+                finish_reason=finish_reason,
+            )
+
+    def _post_and_extract(self, body: dict[str, Any]) -> Either[str, tuple[str, str]]:
+        try:
+            response = self._http.post(self._config.url, json=body, headers=self._auth_headers())
+        except httpx.TimeoutException:
+            return left("llm-timeout")
+        except httpx.RequestError as error:
+            return left(f"llm-request-error: {error}")
+        if response.status_code != 200:
+            return left(f"llm-http-error: {response.status_code}")
+        try:
+            choice = response.json()["choices"][0]
+            raw = choice["message"]["content"]
+            finish_reason = str(choice.get("finish_reason", ""))
+        except (KeyError, IndexError, json.JSONDecodeError):
+            return left("llm-parse-error")
+        return right((raw, finish_reason))
+
+    def _is_json_format_error(
+        self, result: Either[str, tuple[str, str]], body: dict[str, Any]
+    ) -> bool:
+        return (
+            isinstance(result, Left)
+            and result.error == "llm-http-error: 400"
+            and "response_format" in body
+        )
+
+    def _post_with_json_fallback(self, body: dict[str, Any]) -> Either[str, tuple[str, str]]:
+        result = self._post_and_extract(body)
+        if not self._is_json_format_error(result, body):
+            return result
+        fallback = dict(body)
+        fallback.pop("response_format", None)
+        return self._post_and_extract(fallback)
+
+    def _attempt_and_retry(
+        self,
+        body: dict[str, Any],
+        path: str,
+        language: Language,
+        messages: list[dict[str, str]],
+    ) -> Either[str, EnrichmentResult]:
+        for attempt in range(2):
+            post_result = self._post_with_json_fallback(body)
+            if isinstance(post_result, Left):
+                self._log(path, language, messages, post_result.error)
+                return post_result
+            raw, finish_reason = post_result.value
+            parsed = _parse_enrichment(raw)
+            if isinstance(parsed, Right):
+                self._log(path, language, messages, "ok", raw, finish_reason)
+                return parsed
+            if attempt == 0:
+                continue
+            self._log(path, language, messages, parsed.error, raw, finish_reason)
+            return parsed
+        self._log(path, language, messages, "llm-parse-error")
+        return left("llm-parse-error")
 
     def enrich(
         self,
@@ -170,53 +271,4 @@ class LlmClient:
         }
         if self._config.json_mode:
             body["response_format"] = {"type": "json_object"}
-
-        def _log(result: str, response_raw: str = "", finish_reason: str = "") -> None:
-            if self._llm_log is not None:
-                self._llm_log.record(
-                    path=path,
-                    language=str(language),
-                    model=self._config.model,
-                    messages=messages,
-                    response_raw=response_raw,
-                    result=result,
-                    finish_reason=finish_reason,
-                )
-
-        for attempt in range(2):
-            try:
-                response = self._http.post(
-                    self._config.url, json=body, headers=self._auth_headers()
-                )
-            except httpx.TimeoutException:
-                _log("llm-timeout")
-                return left("llm-timeout")
-            except httpx.RequestError as error:
-                result_code = f"llm-request-error: {error}"
-                _log(result_code)
-                return left(result_code)
-
-            if response.status_code != 200:
-                result_code = f"llm-http-error: {response.status_code}"
-                _log(result_code)
-                return left(result_code)
-
-            try:
-                choice = response.json()["choices"][0]
-                raw = choice["message"]["content"]
-                finish_reason = str(choice.get("finish_reason", ""))
-            except (KeyError, IndexError, json.JSONDecodeError):
-                _log("llm-parse-error")
-                return left("llm-parse-error")
-
-            parsed = _parse_enrichment(raw)
-            if isinstance(parsed, Right):
-                _log("ok", raw, finish_reason)
-                return parsed
-            if attempt == 0:
-                continue
-            _log(parsed.error, raw, finish_reason)
-            return parsed
-
-        _log("llm-parse-error")
-        return left("llm-parse-error")
+        return self._attempt_and_retry(body, path, language, messages)

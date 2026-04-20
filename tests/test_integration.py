@@ -12,7 +12,7 @@ runner = CliRunner()
 
 
 def _db(root: Path) -> sqlite3.Connection:
-    return sqlite3.connect(str(root / ".docs" / "maps" / "index.db"))
+    return sqlite3.connect(str(root / ".sourcemap" / "index.db"))
 
 
 def _count(conn: sqlite3.Connection, where: str = "1=1") -> int:

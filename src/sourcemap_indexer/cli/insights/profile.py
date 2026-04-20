@@ -48,6 +48,20 @@ _SQL_PROFILE_TOP = (
 )
 
 
+def _print_test_ratio(conn: sqlite3.Connection) -> None:
+    row = conn.execute(_SQL_PROFILE_RATIO).fetchone()  # noqa: S608
+    if row and row["src_files"]:
+        ratio = round(row["test_lines"] / row["src_lines"], 2) if row["src_lines"] else 0
+        health = "healthy" if ratio >= 0.8 else "low"
+        typer.echo(f"  Source  {row['src_files']:>4} files  {row['src_lines']:>6} lines")
+        typer.echo(
+            f"  Tests   {row['test_files']:>4} files  {row['test_lines']:>6} lines"
+            f"  (ratio: {ratio}× — {health})"
+        )
+    else:
+        typer.echo("  No test files detected.")
+
+
 @app.command(help="Structural profile from walk data only — no LLM required.")
 def profile(root: str | None = typer.Option(None, help="Project root")) -> None:
     db_file = db_path(_resolve_root(root))
@@ -84,17 +98,7 @@ def profile(root: str | None = typer.Option(None, help="Project root")) -> None:
 
     typer.echo("")
     typer.echo("  Test ratio")
-    row = conn.execute(_SQL_PROFILE_RATIO).fetchone()  # noqa: S608
-    if row and row["src_files"]:
-        ratio = round(row["test_lines"] / row["src_lines"], 2) if row["src_lines"] else 0
-        health = "healthy" if ratio >= 0.8 else "low"
-        typer.echo(f"  Source  {row['src_files']:>4} files  {row['src_lines']:>6} lines")
-        typer.echo(
-            f"  Tests   {row['test_files']:>4} files  {row['test_lines']:>6} lines"
-            f"  (ratio: {ratio}× — {health})"
-        )
-    else:
-        typer.echo("  No test files detected.")
+    _print_test_ratio(conn)
 
     typer.echo("")
     typer.echo("  Top files by complexity")

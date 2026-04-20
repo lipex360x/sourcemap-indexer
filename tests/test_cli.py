@@ -16,12 +16,12 @@ runner = CliRunner()
 def test_init_creates_maps_directory(tmp_path: Path) -> None:
     result = runner.invoke(app, ["init", "--root", str(tmp_path)])
     assert result.exit_code == 0
-    assert (tmp_path / ".docs" / "maps").is_dir()
+    assert (tmp_path / ".sourcemap").is_dir()
 
 
 def test_init_creates_db_file(tmp_path: Path) -> None:
     runner.invoke(app, ["init", "--root", str(tmp_path)])
-    assert (tmp_path / ".docs" / "maps" / "index.db").exists()
+    assert (tmp_path / ".sourcemap" / "index.db").exists()
 
 
 def test_init_creates_sourcemapignore(tmp_path: Path) -> None:
@@ -30,7 +30,7 @@ def test_init_creates_sourcemapignore(tmp_path: Path) -> None:
 
 
 def test_init_db_error_exits(tmp_path: Path) -> None:
-    maps_dir = tmp_path / ".docs" / "maps"
+    maps_dir = tmp_path / ".sourcemap"
     maps_dir.mkdir(parents=True)
     maps_dir.chmod(0o000)
     result = runner.invoke(app, ["init", "--root", str(tmp_path)])
@@ -43,7 +43,7 @@ def test_walk_generates_yaml(tmp_path: Path) -> None:
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     result = runner.invoke(app, ["walk", "--root", str(tmp_path)])
     assert result.exit_code == 0
-    index = tmp_path / ".docs" / "maps" / "index.yaml"
+    index = tmp_path / ".sourcemap" / "index.yaml"
     assert index.exists()
     data = yaml.safe_load(index.read_text())
     assert len(data["files"]) >= 1
@@ -353,7 +353,7 @@ def test_stats_by_language_shows_filled_bar_for_enriched_small_language(
     (tmp_path / "README.md").write_text("# readme\n")
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     runner.invoke(app, ["walk", "--root", str(tmp_path)])
-    db_file = tmp_path / ".docs" / "maps" / "index.db"
+    db_file = tmp_path / ".sourcemap" / "index.db"
     conn = sqlite3.connect(str(db_file))
     conn.execute("UPDATE items SET needs_llm = 0, llm_hash = content_hash WHERE language = 'md'")
     conn.commit()
@@ -379,7 +379,7 @@ def test_stale_with_modified_items(tmp_path: Path) -> None:
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     runner.invoke(app, ["walk", "--root", str(tmp_path)])
     runner.invoke(app, ["sync", "--root", str(tmp_path)])
-    db_path = tmp_path / ".docs" / "maps" / "index.db"
+    db_path = tmp_path / ".sourcemap" / "index.db"
     conn = sqlite3.connect(str(db_path))
     fake_hash = "a" * 64
     conn.execute("UPDATE items SET llm_hash = ? WHERE path = 'app.py'", (fake_hash,))
@@ -566,9 +566,265 @@ def test_profile_fails_without_index(tmp_path: Path) -> None:
     assert result.exit_code != 0
 
 
+def test_brief_runs_after_walk(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Structure" in result.output
+    assert "Vocabulary" not in result.output
+
+
+def test_brief_contains_all_sections(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Structure" in result.output
+    assert "Domain" in result.output
+    assert "I/O Boundaries" in result.output
+    assert "System Contracts" in result.output
+    assert "Vocabulary" not in result.output
+
+
+def test_brief_fails_without_index(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path / "missing")])
+    assert result.exit_code != 0
+
+
+def test_brief_shows_no_data_when_not_enriched(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "no enriched data" in result.output
+
+
+def test_brief_contains_workflows_section(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Workflows" in result.output
+
+
+def test_brief_contains_system_contracts_section(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "System Contracts" in result.output
+    assert "Invariants" not in result.output
+
+
+def test_brief_stability_not_in_header(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Stability" not in result.output
+
+
+def test_brief_contracts_grouped_by_file(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'domain/entities.py', 'entities.py', 'py', 'domain', 'stable', "
+        "'entity', 50, 500, 'abc', 0, 0, 0)"
+    )
+    conn.execute(
+        "INSERT INTO invariants (item_id, position, invariant) "
+        "VALUES (1, 0, 'frozen after creation')"
+    )
+    conn.commit()
+    conn.close()
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "domain/entities.py" in result.output
+    assert "frozen after creation" in result.output
+
+
+def test_brief_contracts_capped_at_three(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'domain/repo.py', 'repo.py', 'py', 'domain', 'stable', "
+        "'repo', 50, 500, 'abc', 0, 0, 0)"
+    )
+    for pos, inv in enumerate(["inv_a", "inv_b", "inv_c", "inv_d"]):
+        conn.execute(
+            f"INSERT INTO invariants (item_id, position, invariant) VALUES (1, {pos}, '{inv}')"
+        )
+    conn.commit()
+    conn.close()
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "inv_a" in result.output
+    assert "inv_b" in result.output
+    assert "inv_c" in result.output
+    assert "inv_d" not in result.output
+
+
+def test_brief_contracts_filters_cli_layer(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'domain/e.py', 'e.py', 'py', 'domain', 'stable', "
+        "'entity', 50, 500, 'abc', 0, 0, 0)"
+    )
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (2, 'cli/cmd.py', 'cmd.py', 'py', 'cli', 'stable', "
+        "'cmd', 50, 500, 'def', 0, 0, 0)"
+    )
+    conn.execute(
+        "INSERT INTO invariants (item_id, position, invariant) VALUES (1, 0, 'domain contract')"
+    )
+    conn.execute(
+        "INSERT INTO invariants (item_id, position, invariant) VALUES (2, 0, 'cli contract')"
+    )
+    conn.commit()
+    conn.close()
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "domain contract" in result.output
+    assert "cli contract" not in result.output
+
+
+def test_brief_risk_shows_purpose(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'src/exp.py', 'exp.py', 'py', 'infra', 'experimental', "
+        "'experimental feature purpose', 50, 500, 'abc', 0, 0, 0)"
+    )
+    conn.commit()
+    conn.close()
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "src/exp.py" in result.output
+    assert "experimental feature purpose" in result.output
+
+
+def test_brief_risk_shows_enrichment_gap(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'src/gap.py', 'gap.py', 'py', 'infra', 'unknown', "
+        "NULL, 50, 500, 'abc', 0, 0, 0)"
+    )
+    conn.commit()
+    conn.close()
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "src/gap.py" in result.output
+    assert "enrichment-gap" in result.output
+
+
+def test_brief_structure_has_support_line(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'tests/test_x.py', 'test_x.py', 'py', 'test', 'stable', "
+        "NULL, 10, 100, 'abc', 1, 0, 0)"
+    )
+    conn.commit()
+    conn.close()
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "support:" in result.output
+    assert "test 1" in result.output
+
+
+def test_brief_effects_shows_path_for_single_file(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'infra/llm.py', 'llm.py', 'py', 'infra', 'stable', "
+        "NULL, 50, 500, 'abc', 0, 0, 0)"
+    )
+    conn.execute("INSERT INTO side_effects (item_id, effect) VALUES (1, 'network')")
+    conn.commit()
+    conn.close()
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "network" in result.output
+    assert "infra/llm.py" in result.output
+
+
+def test_brief_domain_excludes_init_files(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'domain/__init__.py', '__init__.py', 'py', 'domain', 'stable', "
+        "'pkg init', 0, 0, 'abc', 0, 0, 0)"
+    )
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (2, 'domain/entity.py', 'entity.py', 'py', 'domain', 'stable', "
+        "'the entity', 50, 500, 'def', 0, 0, 0)"
+    )
+    conn.commit()
+    conn.close()
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "domain/__init__.py" not in result.output
+    assert "domain/entity.py" in result.output
+
+
+def test_brief_invariants_excludes_test_layer(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'src/app.py', 'app.py', 'py', 'application', 'stable', "
+        "'the app', 50, 500, 'abc', 0, 0, 0)"
+    )
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (2, 'tests/test_app.py', 'test_app.py', 'py', 'test', 'stable', "
+        "'tests', 50, 500, 'def', 0, 0, 0)"
+    )
+    conn.execute(
+        "INSERT INTO invariants (item_id, position, invariant) VALUES (1, 0, 'system contract')"
+    )
+    conn.execute(
+        "INSERT INTO invariants (item_id, position, invariant) VALUES (2, 0, 'test convention')"
+    )
+    conn.commit()
+    conn.close()
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "system contract" in result.output
+    assert "test convention" not in result.output
+
+
 def test_reset_confirmed_deletes_db(tmp_path: Path) -> None:
     _init_sync(tmp_path)
-    db_file = tmp_path / ".docs" / "maps" / "index.db"
+    db_file = tmp_path / ".sourcemap" / "index.db"
     assert db_file.exists()
     result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\nn\n")
     assert result.exit_code == 0
@@ -578,7 +834,7 @@ def test_reset_confirmed_deletes_db(tmp_path: Path) -> None:
 
 def test_reset_with_backup_creates_bak_file(tmp_path: Path) -> None:
     _init_sync(tmp_path)
-    maps_dir = tmp_path / ".docs" / "maps"
+    maps_dir = tmp_path / ".sourcemap"
     result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\ny\n")
     assert result.exit_code == 0
     bak_files = list(maps_dir.glob("index.*.bak"))
@@ -588,7 +844,7 @@ def test_reset_with_backup_creates_bak_file(tmp_path: Path) -> None:
 
 def test_reset_without_backup_no_bak_file(tmp_path: Path) -> None:
     _init_sync(tmp_path)
-    maps_dir = tmp_path / ".docs" / "maps"
+    maps_dir = tmp_path / ".sourcemap"
     runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\nn\n")
     assert not list(maps_dir.glob("index.*.bak"))
 
@@ -597,7 +853,7 @@ def test_reset_aborted_keeps_maps(tmp_path: Path) -> None:
     _init_sync(tmp_path)
     result = runner.invoke(app, ["reset", "--root", str(tmp_path)], input="n\n")
     assert result.exit_code == 0
-    assert (tmp_path / ".docs" / "maps").exists()
+    assert (tmp_path / ".sourcemap").exists()
     assert "Cancelled" in result.output
 
 
@@ -620,7 +876,7 @@ def test_restore_no_backups_found(tmp_path: Path) -> None:
 
 def test_restore_lists_and_restores_backup(tmp_path: Path) -> None:
     _init_sync(tmp_path)
-    maps_dir = tmp_path / ".docs" / "maps"
+    maps_dir = tmp_path / ".sourcemap"
     runner.invoke(app, ["reset", "--root", str(tmp_path)], input="y\ny\n")
     bak_files = list(maps_dir.glob("index.*.bak"))
     assert len(bak_files) == 1
@@ -632,7 +888,7 @@ def test_restore_lists_and_restores_backup(tmp_path: Path) -> None:
 
 def test_restore_invalid_selection_exits(tmp_path: Path) -> None:
     _init_sync(tmp_path)
-    maps_dir = tmp_path / ".docs" / "maps"
+    maps_dir = tmp_path / ".sourcemap"
     bak = maps_dir / "index.20240101_000000.bak"
     bak.write_bytes(b"fake")
     result = runner.invoke(app, ["restore", "--root", str(tmp_path)], input="99\n")
@@ -664,7 +920,7 @@ def test_enrich_export_llm_prompt_creates_default_md_file(
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     runner.invoke(app, ["enrich", "--root", str(tmp_path), "--export-llm-prompt"])
-    default_file = tmp_path / ".docs" / "maps" / "prompt.md"
+    default_file = tmp_path / ".sourcemap" / "prompt.md"
     assert default_file.exists()
     assert len(default_file.read_text()) > 0
 
@@ -677,7 +933,7 @@ def test_enrich_export_llm_prompt_content_matches_system_prompt(
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     runner.invoke(app, ["enrich", "--root", str(tmp_path), "--export-llm-prompt"])
-    default_file = tmp_path / ".docs" / "maps" / "prompt.md"
+    default_file = tmp_path / ".sourcemap" / "prompt.md"
     assert default_file.read_text(encoding="utf-8") == SYSTEM_PROMPT
 
 

@@ -38,7 +38,7 @@ class _HybridProgressColumn(ProgressColumn):
         width = self._width
         if task.total is None or task.total == 0:
             pulse = int(time.time() * self._speed) % width
-            return _Text("○" * pulse + "●" + "○" * (width - pulse - 1), style="yellow")
+            return _Text("○" * pulse + "●" + "○" * (width - pulse - 1), style="dim")
         green = min(width, round(task.completed / task.total * width))
         pending = width - green
         if pending == 0:

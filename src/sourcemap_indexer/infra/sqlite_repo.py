@@ -15,6 +15,28 @@ from sourcemap_indexer.domain.value_objects import (
 from sourcemap_indexer.lib.either import Either, left, right
 
 
+def _build_filter_conditions(
+    force: bool,
+    layer: Layer | None,
+    language: Language | None,
+    path: str | None,
+) -> tuple[list[str], list[Any]]:
+    conditions = ["deleted_at IS NULL"]
+    params: list[Any] = []
+    if not force:
+        conditions.append("needs_llm = 1")
+    if layer is not None:
+        conditions.append("layer = ?")
+        params.append(str(layer))
+    if language is not None:
+        conditions.append("language = ?")
+        params.append(str(language))
+    if path is not None:
+        conditions.append("path = ?")
+        params.append(path)
+    return conditions, params
+
+
 def _row_to_item(row: dict[str, Any], connection: sqlite3.Connection) -> Item:
     item_id = row["id"]
     tags_rows = connection.execute("SELECT tag FROM tags WHERE item_id = ?", (item_id,)).fetchall()
@@ -185,19 +207,7 @@ class SqliteItemRepository:
         path: str | None = None,
     ) -> Either[str, list[Item]]:
         try:
-            conditions = ["deleted_at IS NULL"]
-            params: list[Any] = []
-            if not force:
-                conditions.append("needs_llm = 1")
-            if layer is not None:
-                conditions.append("layer = ?")
-                params.append(str(layer))
-            if language is not None:
-                conditions.append("language = ?")
-                params.append(str(language))
-            if path is not None:
-                conditions.append("path = ?")
-                params.append(path)
+            conditions, params = _build_filter_conditions(force, layer, language, path)
             query = "SELECT * FROM items WHERE " + " AND ".join(conditions)
             if limit is not None:
                 query += " LIMIT ?"

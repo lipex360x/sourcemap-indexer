@@ -16,5 +16,5 @@ build/
 .pytest_cache/
 .coverage
 htmlcov/
-.docs/maps/
-.docs/logs/
+.sourcemap/
+.env
