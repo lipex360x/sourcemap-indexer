@@ -22,7 +22,6 @@
 | 10 | [Post-commit hook](#hook) |
 | 11 | [SQLite schema](#schema) |
 | 12 | [Dev setup](#dev) |
-| 13 | [Walk-only analysis](#profile) |
 
 ---
 
@@ -92,6 +91,22 @@ files:
 This file is checked in to source control optionally — it gives a plain-text audit trail of what was indexed.
 
 </details>
+
+#### What you get without an LLM
+
+After `walk`, the database already holds language, line count, size, and hash for every file. Run `sourcemap profile` to turn that into a structural overview:
+
+```
+Stack            py  46 files  4289 lines  ██████████████████
+                 sh   6 files   312 lines  ██
+Inferred layers  test       22 files  2456 lines
+                 infra      10 files   667 lines
+                 application 8 files   513 lines
+Test ratio       Source 27 / Tests 22   (ratio 1.29× — healthy)
+Top files        src/sourcemap_indexer/cli.py   500 lines
+```
+
+Layers are inferred from directory names (`domain/`, `infra/`, `tests/`, …). For LLM-assigned layers, use `sourcemap overview` after `enrich`.
 
 ### Phase 3 — `sourcemap enrich`
 
@@ -404,30 +419,5 @@ cd sourcemap-indexer
 uv sync
 uv run pytest
 ```
-
-[↑ back to top](#topo)
-
----
-
-<a id="profile"></a>
-
-## 13. Walk-only analysis
-
-`sourcemap profile` gives a structural overview of any indexed project using only walk data — no LLM required:
-
-```bash
-sourcemap walk    # index the files
-sourcemap profile # analyse the structure
-```
-
-Output includes:
-
-- **Stack** — language distribution by file count and line count
-- **Inferred layers** — architectural breakdown derived from directory names (`tests/`, `domain/`, `infra/`, `application/`, `lib/`, `scripts/`)
-- **Test ratio** — source files vs test files (line count and a health indicator)
-- **Top files by complexity** — largest files by line count
-
-> [!NOTE]
-> Layer inference is purely path-based — it does not require `sourcemap enrich`. After enrichment, use `sourcemap overview` for LLM-assigned layers instead.
 
 [↑ back to top](#topo)
