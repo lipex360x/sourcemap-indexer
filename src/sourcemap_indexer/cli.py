@@ -10,6 +10,8 @@ from importlib.resources import files
 from pathlib import Path
 
 import typer
+from rich.console import Console as _Console
+from rich.panel import Panel as _Panel
 
 from sourcemap_indexer.application.enrich import run_enrich
 from sourcemap_indexer.application.sync import run_sync
@@ -135,10 +137,15 @@ def enrich(
     project_root = _resolve_root(root)
     load_dotenv(project_root / ".env")
     if not is_llm_configured():
-        typer.echo(
-            typer.style("Error: LLM not configured.", fg=typer.colors.RED, bold=True), err=True
+        _Console(stderr=True).print(
+            _Panel(
+                "LLM not configured.\n"
+                "Set [bold]SOURCEMAP_LLM_URL[/bold] in your environment or [bold].env[/bold] file.",
+                title="Error",
+                border_style="red",
+                title_align="left",
+            )
         )
-        typer.echo("  Set SOURCEMAP_LLM_URL in your environment or .env file.", err=True)
         raise typer.Exit(1)
     repo = _open_repo(project_root)
     config = from_environ()
