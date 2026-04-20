@@ -1,4 +1,4 @@
-<a id="topo"></a>
+<a id="top"></a>
 
 ## sourcemap-indexer
 
@@ -144,7 +144,7 @@ After enrichment, `needs_llm` is cleared and `llm_hash` is set to the content ha
 > [!NOTE]
 > Set `SOURCEMAP_LLM_LOG=1` to record every LLM request and response to a timestamped YAML file. Logs land in `.docs/logs/` by default, or inside the directory set by `SOURCEMAP_MAPS_DIR` when customized. Each `enrich` session produces one file (`llm-YYYYMMDD-HHMMSSffffff.yaml`) containing one YAML document per enriched file — useful for debugging prompts or auditing model output.
 
-[↑ back to top](#topo)
+[↑ back to top](#top)
 
 ---
 
@@ -164,7 +164,7 @@ After enrichment, `needs_llm` is cleared and `llm_hash` is set to the content ha
 > [!IMPORTANT]
 > `sourcemap enrich` calls an LLM. Without a reachable endpoint (`SOURCEMAP_LLM_URL`), walk and stats work fine — only enrichment is blocked.
 
-[↑ back to top](#topo)
+[↑ back to top](#top)
 
 ---
 
@@ -190,7 +190,7 @@ uv tool uninstall sourcemap-indexer
 
 The binary lives at `~/.local/bin/sourcemap`. The tool environment is at `~/.local/share/uv/tools/sourcemap-indexer/`.
 
-[↑ back to top](#topo)
+[↑ back to top](#top)
 
 ---
 
@@ -209,7 +209,7 @@ sourcemap stats   # auto-walks first, then shows totals and pending files
 > [!NOTE]
 > `sourcemap stats` automatically runs `walk` before displaying data — no need to run `walk` manually before `stats`.
 
-[↑ back to top](#topo)
+[↑ back to top](#top)
 
 ---
 
@@ -243,6 +243,8 @@ All commands are invoked as `sourcemap <command>`.
 | `--layer <layer>` | Filter by architectural layer |
 | `--language <lang>` | Filter by language |
 | `-m "<msg>"` | Inject an extra instruction into the LLM prompt |
+| `--export-llm-prompt` | Write the active prompt to a `.md` file before running (defaults to `maps dir/prompt.md`) |
+| `--output <path>` | Destination `.md` file for `--export-llm-prompt` |
 
 ### Exploration
 
@@ -282,7 +284,7 @@ All commands are invoked as `sourcemap <command>`.
 | `restore` | Restore `index.db` from a previously saved `.bak` file |
 | `install-skill` | Copy the skill file to your AI assistant's skills directory (`--target <dir>`) |
 
-[↑ back to top](#topo)
+[↑ back to top](#top)
 
 ---
 
@@ -298,14 +300,10 @@ All commands are invoked as `sourcemap <command>`.
 | `SOURCEMAP_LLM_LOG` | _(off)_ | Set to `1` to write LLM request/response logs to `logs/` inside the maps directory (or `.docs/logs/` when using the default location) |
 | `SOURCEMAP_PAGE_SIZE` | `20` | Number of pending files shown per page in `stats` |
 | `SOURCEMAP_MAPS_DIR` | `.docs/maps` | Output directory for `index.db` and `index.yaml` — relative to project root or absolute |
-| `SOURCEMAP_EXPORT_LLM_PROMPT` | _(off)_ | Path to a `.md` file — `enrich` writes the active prompt there before calling the LLM (useful to inspect or create a starting point for customisation) |
-| `SOURCEMAP_IMPORT_LLM_PROMPT` | _(off)_ | Path to a `.md` file — `enrich` reads it and sends its contents as the system prompt instead of the built-in default |
-
-> [!NOTE]
-> Both variables require a `.md` extension — `enrich` exits with an error if another extension is used.
+| `SOURCEMAP_IMPORT_LLM_PROMPT` | _(off)_ | Path to a `.md` file — `enrich` reads it and sends its contents as the system prompt instead of the built-in default. Must have `.md` extension |
 
 > [!TIP]
-> Typical workflow: set `SOURCEMAP_EXPORT_LLM_PROMPT` once to dump the default prompt, edit the file, then point `SOURCEMAP_IMPORT_LLM_PROMPT` to it on subsequent runs.
+> Typical workflow: run `sourcemap enrich --export-llm-prompt` once to dump the default prompt, edit the generated file, then set `SOURCEMAP_IMPORT_LLM_PROMPT` to its path for subsequent runs.
 
 `sourcemap enrich` automatically reads a `.env` file from the project root before resolving env vars:
 
@@ -319,7 +317,7 @@ SOURCEMAP_LLM_API_KEY=your-api-key
 > [!NOTE]
 > Variables already present in the shell environment take precedence over `.env` values.
 
-[↑ back to top](#topo)
+[↑ back to top](#top)
 
 ---
 
@@ -371,7 +369,7 @@ Pattern rules:
 | `src/generated/` | Subdirectory under a specific path |
 | `#` at line start | Comment — line is ignored |
 
-[↑ back to top](#topo)
+[↑ back to top](#top)
 
 ---
 
@@ -400,7 +398,7 @@ export SOURCEMAP_LLM_MODEL=your-loaded-model-name
 sourcemap enrich --limit 10
 ```
 
-[↑ back to top](#topo)
+[↑ back to top](#top)
 
 ---
 
@@ -418,7 +416,7 @@ sourcemap install-skill --target ~/.claude/skills
 sourcemap install-skill --target <your-tool-skills-dir>
 ```
 
-[↑ back to top](#topo)
+[↑ back to top](#top)
 
 ---
 
@@ -435,7 +433,7 @@ Installs a `post-commit` hook that runs `sourcemap walk` after every commit, kee
 > [!NOTE]
 > Enrichment is not automatic — it calls the LLM and can be slow. Run `sourcemap enrich` manually when you want updated metadata.
 
-[↑ back to top](#topo)
+[↑ back to top](#top)
 
 ---
 
@@ -488,7 +486,7 @@ Layers: `domain | infra | application | cli | hook | lib | config | doc | test |
 
 Side effects: `writes_fs | spawns_process | network | git | environ`
 
-[↑ back to top](#topo)
+[↑ back to top](#top)
 
 ---
 
@@ -503,4 +501,4 @@ uv sync
 uv run pytest
 ```
 
-[↑ back to top](#topo)
+[↑ back to top](#top)
