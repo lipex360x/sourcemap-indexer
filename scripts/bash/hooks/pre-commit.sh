@@ -5,8 +5,8 @@ SCRIPT_REAL="$(readlink "$0" 2>/dev/null || echo "$0")"
 ROOT="$(cd "$(dirname "$SCRIPT_REAL")/../../.." && pwd -P)"
 VENV="$ROOT/.venv/bin"
 
-staged_py=$(git diff --cached --name-only | grep '\.py$' || true)
-staged_sh=$(git diff --cached --name-only | grep '\.sh$' || true)
+staged_py=$(git diff --cached --name-only --diff-filter=d | grep '\.py$' || true)
+staged_sh=$(git diff --cached --name-only --diff-filter=d | grep '\.sh$' || true)
 
 if [[ -n "$staged_sh" ]]; then
     printf "→ shellcheck\n"
