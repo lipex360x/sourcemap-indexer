@@ -82,6 +82,6 @@ def create_llm_log(
     environ: dict[str, str] | None = None,
 ) -> LlmLog:
     resolved_env = environ if environ is not None else dict(os.environ)
-    if resolved_env.get("NO_LOG_FILE") == "1":
+    if resolved_env.get("SOURCEMAP_LLM_LOG") != "1":
         return _NoopLlmLog()
     return _FileLlmLog(log_dir / "llm.yaml")
