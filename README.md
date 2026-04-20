@@ -264,7 +264,7 @@ sourcemap stats   # auto-walks first, then shows totals and pending files
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SOURCEMAP_LLM_URL` | _(required)_ | LLM endpoint (any OpenAI-compatible API) — `enrich` is blocked until this is set |
-| `SOURCEMAP_LLM_MODEL` | `qwen/qwen3-coder-30b` | Model name passed to the endpoint |
+| `SOURCEMAP_LLM_MODEL` | _(required)_ | Model name passed to the endpoint — `enrich` is blocked until this is set |
 | `SOURCEMAP_LLM_API_KEY` | _(empty)_ | Bearer token for authenticated providers |
 | `SOURCEMAP_LLM_LOG` | _(off)_ | Set to `1` to write LLM request/response logs to `.docs/logs/` |
 | `SOURCEMAP_PAGE_SIZE` | `20` | Number of pending files shown per page in `stats` |

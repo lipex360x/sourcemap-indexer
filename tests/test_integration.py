@@ -65,6 +65,7 @@ def test_enrich_with_fake_client(project: Path, monkeypatch: pytest.MonkeyPatch)
     from sourcemap_indexer.lib.either import right
 
     monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
     monkeypatch.setattr(cli_module.LlamaClient, "ping", lambda _self: right(None))
     monkeypatch.setattr(
         cli_module,
