@@ -120,6 +120,20 @@ def test_from_environ_uses_defaults_when_env_absent(monkeypatch: pytest.MonkeyPa
     assert isinstance(config.model, str)
 
 
+def test_is_llm_configured_returns_true_when_url_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://myhost/v1/chat/completions")
+    from sourcemap_indexer.infra.llama_client import is_llm_configured
+
+    assert is_llm_configured() is True
+
+
+def test_is_llm_configured_returns_false_when_url_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
+    from sourcemap_indexer.infra.llama_client import is_llm_configured
+
+    assert is_llm_configured() is False
+
+
 def test_enrich_returns_right_for_valid_response() -> None:
     client = _client_with(_mock_response(_VALID_PAYLOAD))
     result = client.enrich("src/auth.py", Language.PY, "def verify(token): ...")

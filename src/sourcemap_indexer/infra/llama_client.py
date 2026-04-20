@@ -52,6 +52,10 @@ class EnrichmentResult:
     invariants: tuple[str, ...]
 
 
+def is_llm_configured() -> bool:
+    return "SOURCEMAP_LLM_URL" in os.environ
+
+
 def from_environ() -> LlmConfig:
     return LlmConfig(
         url=os.environ.get("SOURCEMAP_LLM_URL", LlmConfig.url),

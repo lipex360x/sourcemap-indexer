@@ -8,6 +8,7 @@ import yaml
 from typer.testing import CliRunner
 
 from sourcemap_indexer.cli import app
+from sourcemap_indexer.lib.either import right
 
 runner = CliRunner()
 
@@ -115,13 +116,25 @@ def test_show_missing_path_exits_nonzero(tmp_path: Path) -> None:
     assert result.exit_code != 0
 
 
-def test_stats_shows_counts(tmp_path: Path) -> None:
+def test_stats_shows_counts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
     (tmp_path / "app.py").write_text("x = 1\n")
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     runner.invoke(app, ["walk", "--root", str(tmp_path)])
     runner.invoke(app, ["sync", "--root", str(tmp_path)])
     result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
     assert result.exit_code == 0
+    assert "LLM: not configured" in result.output
+
+
+def test_stats_shows_model_when_configured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://myhost/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "my-model")
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "my-model" in result.output
+    assert "myhost" in result.output
 
 
 def test_stale_lists_items(tmp_path: Path) -> None:
@@ -162,11 +175,22 @@ def test_open_repo_db_error(tmp_path: Path) -> None:
     assert result.exit_code != 0
 
 
+def test_enrich_fails_when_llm_not_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+    assert "not configured" in result.output
+
+
 def test_enrich_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import sourcemap_indexer.cli as cli_module
     from sourcemap_indexer.application.enrich import EnrichReport
     from sourcemap_indexer.lib.either import right
 
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
     monkeypatch.setattr(
         cli_module,
         "run_enrich",
@@ -174,6 +198,7 @@ def test_enrich_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
             EnrichReport(enriched=2, failed=0, skipped=1, errors=("warn",))
         ),
     )
+    monkeypatch.setattr(cli_module.LlamaClient, "ping", lambda _self: right(None))
     (tmp_path / "app.py").write_text("x = 1\n")
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     runner.invoke(app, ["walk", "--root", str(tmp_path)])
@@ -187,6 +212,8 @@ def test_enrich_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import sourcemap_indexer.cli as cli_module
     from sourcemap_indexer.lib.either import left
 
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
+    monkeypatch.setattr(cli_module.LlamaClient, "ping", lambda _self: right(None))
     monkeypatch.setattr(cli_module, "run_enrich", lambda *_args, **_kwargs: left("llm-error"))
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])

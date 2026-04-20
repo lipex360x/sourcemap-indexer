@@ -17,7 +17,7 @@ from sourcemap_indexer.application.walk import run_walk
 from sourcemap_indexer.config import db_path, find_project_root, index_yaml_path, maps_dir
 from sourcemap_indexer.domain.value_objects import Language, Layer
 from sourcemap_indexer.infra.dotenv import load_dotenv
-from sourcemap_indexer.infra.llama_client import LlamaClient, from_environ
+from sourcemap_indexer.infra.llama_client import LlamaClient, from_environ, is_llm_configured
 from sourcemap_indexer.infra.migrator import init_db
 from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
 from sourcemap_indexer.lib.either import Left
@@ -134,6 +134,12 @@ def enrich(
 ) -> None:
     project_root = _resolve_root(root)
     load_dotenv(project_root / ".env")
+    if not is_llm_configured():
+        typer.echo(
+            typer.style("Error: LLM not configured.", fg=typer.colors.RED, bold=True), err=True
+        )
+        typer.echo("  Set SOURCEMAP_LLM_URL in your environment or .env file.", err=True)
+        raise typer.Exit(1)
     repo = _open_repo(project_root)
     config = from_environ()
     client = LlamaClient(config)
@@ -282,7 +288,10 @@ def stats(
     progress = "█" * prog_filled + "░" * (20 - prog_filled)
 
     typer.echo(sep)
-    typer.echo(f"  Model: {llm.model}  ({llm.url})")
+    if is_llm_configured():
+        typer.echo(f"  Model: {llm.model}  ({llm.url})")
+    else:
+        typer.echo("  LLM: not configured")
     typer.echo(f"  Total: {total:<6}  Enriched: {enriched:<6}  Pending: {pending}")
     typer.echo(f"  [{progress}] {pct}%")
     typer.echo("")
