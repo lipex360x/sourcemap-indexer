@@ -275,7 +275,22 @@ def stats(
     llm = from_environ()
     page_size = int(os.environ.get("SOURCEMAP_PAGE_SIZE", "20"))
 
+    output = index_yaml_path(project_root)
+    walk_result = run_walk(project_root, output)
+    if isinstance(walk_result, Left):
+        typer.echo(f"Error: {walk_result.error}", err=True)
+        raise typer.Exit(1)
     repo = _open_repo(project_root)
+    sync_result = run_sync(output, repo)
+    if isinstance(sync_result, Left):
+        typer.echo(f"Error: {sync_result.error}", err=True)
+        raise typer.Exit(1)
+    report = sync_result.value
+    if report.inserted or report.updated or report.soft_deleted:
+        typer.echo(
+            f"Sync: inserted={report.inserted} updated={report.updated} "
+            f"soft_deleted={report.soft_deleted}"
+        )
     all_result = repo.search(tags=None, layer=None, language=None)
     if isinstance(all_result, Left):
         typer.echo(f"Error: {all_result.error}", err=True)
