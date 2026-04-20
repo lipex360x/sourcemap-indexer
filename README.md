@@ -228,28 +228,23 @@ sourcemap stats   # auto-walks first, then shows totals and pending files
 
 | Command | Description |
 |---------|-------------|
-| `sourcemap enrich [--limit N]` | Send pending files to the LLM (validates reachability first) |
-| `sourcemap enrich --force` | Re-enrich already enriched files (e.g. to fix language or layer) |
-| `sourcemap enrich --file <path>` | Re-enrich a single specific file |
-| `sourcemap enrich --layer unknown` | Target only files in a specific layer |
-| `sourcemap enrich --language other` | Target only files in a specific language |
-| `sourcemap enrich -m "<instruction>"` | Inject an extra instruction into the LLM prompt |
+| `sourcemap enrich` | Send pending files to the LLM. `--limit N` processes in batches; `--force` re-enriches all; `--file <path>` targets a single file; `--layer` / `--language` to filter; `-m "<msg>"` injects an extra instruction |
 | `sourcemap stale` | List files whose content changed since the last enrich run |
 
 ### Exploration
 
 | Command | Description |
 |---------|-------------|
-| `sourcemap profile` | Structural overview from walk data only — language distribution, inferred layers, test ratio, top files by size |
-| `sourcemap stats [--files] [--page N]` | Auto-runs walk, then shows total/enriched/pending counts by layer and language; bar width is proportional to file count — green means fully enriched, yellow means pending files exist; add `--files` to list them, combine with `--page N` to paginate |
+| `sourcemap profile` | Structural overview (walk data only): language distribution, inferred layers, test ratio, top files by size |
+| `sourcemap stats` | Auto-runs walk; counts by layer and language. Bar width = relative file count; green = fully enriched, yellow = pending. `--files` lists pending files; `--page N` paginates |
 | `sourcemap overview` | Layer × language matrix |
 | `sourcemap domain` | Enriched domain-layer files with their purpose |
 | `sourcemap effects` | Files with network or git side effects |
 | `sourcemap tags` | Top 30 semantic tags by frequency |
 | `sourcemap unstable` | Experimental or deprecated files |
-| `sourcemap find [--tag T] [--layer L] [--language L]` | Search by tag, layer, or language |
-| `sourcemap show <path>` | Full metadata for a specific file |
-| `sourcemap query "<sql>"` | Free-form SQL against the index database |
+| `sourcemap find` | Search by `--tag T`, `--layer L`, `--language L` |
+| `sourcemap show` | Full metadata for a path: `sourcemap show <path>` |
+| `sourcemap query` | Free-form SQL: `sourcemap query "<sql>"` |
 
 ### Maintenance
 
@@ -257,7 +252,7 @@ sourcemap stats   # auto-walks first, then shows totals and pending files
 |---------|-------------|
 | `sourcemap reset` | Delete the index (offers a timestamped backup before wiping) |
 | `sourcemap restore` | Restore `index.db` from a previously saved `.bak` file |
-| `sourcemap install-skill --target <dir>` | Copy the skill file to your AI assistant's skills directory |
+| `sourcemap install-skill` | Copy the skill file to your AI assistant's dir: `--target <dir>` |
 
 [↑ back to top](#topo)
 
