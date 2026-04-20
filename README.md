@@ -25,12 +25,13 @@
 | 5 | [Commands](#commands) |
 | 6 | [Environment variables](#env) |
 | 7 | [Ignoring files](#ignoring) |
-| 8 | [Plugging in a different LLM](#llm) |
-| 9 | [AI assistant skill](#skill) |
-| 10 | [Post-commit hook](#hook) |
-| 11 | [SQLite schema](#schema) |
-| 12 | [Dev setup](#dev) |
-| 13 | [Code quality](#quality) |
+| 8 | [Custom layers](#layers) |
+| 9 | [Plugging in a different LLM](#llm) |
+| 10 | [AI assistant skill](#skill) |
+| 11 | [Post-commit hook](#hook) |
+| 12 | [SQLite schema](#schema) |
+| 13 | [Dev setup](#dev) |
+| 14 | [Code quality](#quality) |
 
 ---
 
@@ -376,9 +377,34 @@ Pattern rules:
 
 ---
 
+<a id="layers"></a>
+
+## 8. Custom layers
+
+By default, the LLM assigns one of the built-in layers (`domain`, `infra`, `application`, `cli`, `lib`, `config`, `hook`, `doc`, `test`, `unknown`). If your project uses a different architecture, you can declare additional layer names in `.sourcemap/layers.yaml`:
+
+```yaml
+layers:
+  - presentation
+  - gateway
+  - jobs
+```
+
+`sourcemap init` creates the file with a commented-out example. Any layer name listed here is treated as valid — the LLM can assign it and `find --layer` will match it.
+
+> [!NOTE]
+> Built-in layers always remain valid. `layers.yaml` only adds names; it does not replace the defaults.
+
+> [!TIP]
+> After adding new layers, run `sourcemap enrich --force --layer unknown` to re-classify files that were previously unrecognised.
+
+[↑ back to top](#top)
+
+---
+
 <a id="llm"></a>
 
-## 8. Plugging in a different LLM
+## 9. Plugging in a different LLM
 
 The enrichment client targets any OpenAI-compatible endpoint:
 
@@ -407,7 +433,7 @@ sourcemap enrich --limit 10
 
 <a id="skill"></a>
 
-## 9. AI assistant skill
+## 10. AI assistant skill
 
 Install the bundled skill file so your AI assistant can query the index directly:
 
@@ -425,7 +451,7 @@ sourcemap install-skill --target <your-tool-skills-dir>
 
 <a id="hook"></a>
 
-## 10. Post-commit hook (auto-walk on every commit)
+## 11. Post-commit hook (auto-walk on every commit)
 
 ```bash
 bash scripts/bash/install-hook.sh
@@ -442,7 +468,7 @@ Installs a `post-commit` hook that runs `sourcemap walk` after every commit, kee
 
 <a id="schema"></a>
 
-## 11. SQLite schema
+## 12. SQLite schema
 
 One core table (`items`) holds a row per file. Three satellite tables store the multi-valued LLM output (a file has many tags, many side effects, many invariants):
 
@@ -485,7 +511,7 @@ erDiagram
 **Walk fills**: `path`, `name`, `language`, `lines`, `size_bytes`, `content_hash`, `needs_llm`, `deleted_at`.
 **Enrich fills**: `purpose`, `layer`, `stability`, `llm_hash`, `llm_at`, plus rows in `tags` / `side_effects` / `invariants`.
 
-Layers: `domain | infra | application | cli | hook | lib | config | doc | test | unknown`
+Layers: `domain | infra | application | cli | hook | lib | config | doc | test | unknown` — plus any user-defined names declared in `.sourcemap/layers.yaml`
 
 Side effects: `writes_fs | spawns_process | network | git | environ`
 
@@ -495,7 +521,7 @@ Side effects: `writes_fs | spawns_process | network | git | environ`
 
 <a id="dev"></a>
 
-## 12. Dev setup
+## 13. Dev setup
 
 ```bash
 git clone https://github.com/lipex360x/sourcemap-indexer.git
@@ -510,7 +536,7 @@ uv run pytest
 
 <a id="quality"></a>
 
-## 13. Code quality
+## 14. Code quality
 
 Every commit passes a pre-commit pipeline that enforces the following gates:
 

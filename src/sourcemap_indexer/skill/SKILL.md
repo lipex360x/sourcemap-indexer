@@ -20,7 +20,7 @@ Query the local SQLite index built by sourcemap-indexer to understand any projec
 
 | Input | Source | Required | Validation | On invalid |
 |-------|--------|----------|------------|------------|
-| Project root | CWD or `--root` option | no | Directory with `.docs/maps/index.db` | Run `sourcemap init && sourcemap walk` |
+| Project root | CWD or `--root` option | no | Directory with `.sourcemap/index.db` | Run `sourcemap init && sourcemap walk` |
 | Query intent | Conversation | yes | What the user wants to know about the codebase | Ask the user to clarify |
 
 </input_contract>
@@ -82,7 +82,7 @@ side_effects (item_id, effect)
 invariants   (item_id, invariant)
 ```
 
-Layers: `domain | infra | application | cli | hook | lib | config | doc | test | unknown`
+Layers: `domain | infra | application | cli | hook | lib | config | doc | test | unknown` — plus any user-defined names declared in `.sourcemap/layers.yaml`
 Stability: `core | stable | experimental | deprecated | unknown`
 Effects: `writes_fs | spawns_process | network | git | environ`
 
