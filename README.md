@@ -290,6 +290,7 @@ All commands are invoked as `sourcemap <command>`.
 
 | Command | Description |
 |---------|-------------|
+| `brief` | Single-call project briefing — architecture, domain files, tags, side effects, risk areas |
 | `profile` | Language distribution, inferred layers, test ratio, top files by size |
 | `stats` | Auto-runs walk; counts by layer and language; bar width = relative file count; green = enriched, yellow = pending |
 | `overview` | Layer × language matrix |

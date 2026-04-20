@@ -48,8 +48,11 @@ Query the local SQLite index built by sourcemap-indexer to understand any projec
 
 ## Available commands
 
+> **For project discovery, run `sourcemap brief` — single call, complete context.**
+
 | Command | When to use |
 |---------|-------------|
+| `sourcemap brief` | **Project discovery** — totals, architecture, domain files, I/O boundaries, vocabulary, risk areas in one shot |
 | `sourcemap enrich [--limit N]` | Run LLM enrichment on pending files (validates LLM reachability first) |
 | `sourcemap enrich --force` | Re-enrich already enriched files (e.g. to fix language or layer) |
 | `sourcemap enrich --layer <L>` | Target only files in a specific layer (useful for `unknown`) |
@@ -107,16 +110,13 @@ Match the intent to one of these modes:
 
 ### 3a. Full project overview
 
-Run in sequence:
-
 ```bash
-sourcemap overview
-sourcemap domain
-sourcemap tags
-sourcemap effects
+sourcemap brief
 ```
 
-Synthesize a markdown summary: what the project does, its layers, key domain concepts (from tags), and I/O boundaries (from effects).
+Output sections: totals, Architecture (layer × language matrix), Domain (top enriched domain files with purpose), I/O Boundaries (side effects by count), Vocabulary (top 15 tags), Risk Areas (experimental/deprecated files).
+
+Synthesize a markdown summary from this single output: what the project does, its layers, key domain concepts, and I/O boundaries.
 
 ### 3b. Targeted search
 

@@ -566,6 +566,36 @@ def test_profile_fails_without_index(tmp_path: Path) -> None:
     assert result.exit_code != 0
 
 
+def test_brief_runs_after_walk(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Architecture" in result.output
+    assert "Vocabulary" in result.output
+
+
+def test_brief_contains_all_sections(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Architecture" in result.output
+    assert "Domain" in result.output
+    assert "I/O Boundaries" in result.output
+    assert "Vocabulary" in result.output
+
+
+def test_brief_fails_without_index(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path / "missing")])
+    assert result.exit_code != 0
+
+
+def test_brief_shows_no_data_when_not_enriched(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "no enriched data" in result.output
+
+
 def test_reset_confirmed_deletes_db(tmp_path: Path) -> None:
     _init_sync(tmp_path)
     db_file = tmp_path / ".sourcemap" / "index.db"
