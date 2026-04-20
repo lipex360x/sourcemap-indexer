@@ -97,16 +97,41 @@ Variables already present in the environment take precedence over `.env` values.
 
 ## Ignoring files
 
-`sourcemap init` creates a default `.sourcemapignore`. Files matched by `.gitignore` are also skipped automatically.
+`.sourcemapignore` uses the same syntax as `.gitignore`. Both files are read automatically — no extra config needed.
 
-Add project-specific patterns using the same syntax as `.gitignore`:
+**Built-in defaults** (always excluded):
 
 ```
-.venv/
-dist/
-*.min.js
+node_modules/   .git/         .venv/        __pycache__/
+dist/           build/        .next/        .turbo/
+coverage/       .docs/maps/   *.pyc         *.min.js
+*.lock          *.db          *.sqlite      *.map
+```
+
+**Add project-specific patterns** to `.sourcemapignore`:
+
+```gitignore
+# exclude by extension
+*.png
+*.jpg
+*.svg
+*.ico
+*.woff2
+
+# exclude directories
 secrets/
+storybook-static/
+public/assets/
+
+# exclude specific files
+src/generated/schema.ts
 ```
+
+Pattern rules:
+- `*.png` — all `.png` files anywhere in the tree
+- `assets/` — entire directory (trailing slash = directory)
+- `src/generated/` — subdirectory under a specific path
+- Lines starting with `#` are comments
 
 ## Plugging in a different LLM
 
