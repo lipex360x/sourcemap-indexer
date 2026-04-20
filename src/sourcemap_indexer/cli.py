@@ -25,10 +25,22 @@ from rich.text import Text as _Text
 from sourcemap_indexer.application.enrich import run_enrich
 from sourcemap_indexer.application.sync import run_sync
 from sourcemap_indexer.application.walk import run_walk
-from sourcemap_indexer.config import db_path, find_project_root, index_yaml_path, logs_dir, maps_dir
+from sourcemap_indexer.config import (
+    db_path,
+    find_project_root,
+    index_yaml_path,
+    logs_dir,
+    maps_dir,
+    prompt_path,
+)
 from sourcemap_indexer.domain.value_objects import Language, Layer
 from sourcemap_indexer.infra.dotenv import load_dotenv
-from sourcemap_indexer.infra.llama_client import LlamaClient, from_environ, is_llm_configured
+from sourcemap_indexer.infra.llama_client import (
+    SYSTEM_PROMPT,
+    LlamaClient,
+    from_environ,
+    is_llm_configured,
+)
 from sourcemap_indexer.infra.migrator import init_db
 from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
 from sourcemap_indexer.lib.either import Left
@@ -155,9 +167,21 @@ def enrich(
     language: str | None = typer.Option(None, "--language", help=_LANG_HELP),
     message: str | None = typer.Option(None, "-m", help="Extra instruction injected into prompt"),
     file: str | None = typer.Option(None, "--file", help=_FILE_HELP),
+    export_prompt: bool = typer.Option(
+        False, "--export-prompt", help="Export the default LLM prompt to maps dir and exit"
+    ),
 ) -> None:
     project_root = _resolve_root(root)
     load_dotenv(project_root / ".env")
+
+    pfile = prompt_path(project_root)
+    if export_prompt:
+        pfile.parent.mkdir(parents=True, exist_ok=True)
+        pfile.write_text(SYSTEM_PROMPT, encoding="utf-8")
+        typer.echo(f"Prompt exported to {pfile}")
+        typer.echo("Edit it, then run  sourcemap enrich  to use your custom prompt.")
+        raise typer.Exit(0)
+
     if not is_llm_configured():
         _Console(stderr=True).print(
             _Panel(
@@ -172,8 +196,11 @@ def enrich(
     repo = _open_repo(project_root)
     config = from_environ()
     llm_log = create_llm_log(logs_dir(project_root))
-    client = LlamaClient(config, llm_log=llm_log)
+    custom_prompt = pfile.read_text(encoding="utf-8") if pfile.exists() else None
+    client = LlamaClient(config, llm_log=llm_log, system_prompt=custom_prompt)
     typer.echo(f"Model: {config.model}  ({config.url})")
+    if custom_prompt is not None:
+        typer.echo(f"Prompt: {pfile}")
     if message:
         typer.echo(f"Instruction: {message}")
     ping_result = client.ping()
