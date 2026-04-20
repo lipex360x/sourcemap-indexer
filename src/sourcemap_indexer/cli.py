@@ -12,6 +12,15 @@ from pathlib import Path
 import typer
 from rich.console import Console as _Console
 from rich.panel import Panel as _Panel
+from rich.progress import (
+    MofNCompleteColumn,
+    Progress,
+    ProgressColumn,
+    SpinnerColumn,
+    Task,
+    TextColumn,
+)
+from rich.text import Text as _Text
 
 from sourcemap_indexer.application.enrich import run_enrich
 from sourcemap_indexer.application.sync import run_sync
@@ -24,6 +33,18 @@ from sourcemap_indexer.infra.migrator import init_db
 from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
 from sourcemap_indexer.lib.either import Left
 from sourcemap_indexer.lib.llm_log import create_llm_log
+
+
+class _DotBarColumn(ProgressColumn):
+    def render(self, task: Task) -> _Text:
+        width = 20
+        if task.total is None or task.total == 0:
+            pulse = int(time.time() * 4) % width
+            dots = "○" * pulse + "●" + "○" * (width - pulse - 1)
+            return _Text(dots, style="yellow")
+        filled = round(task.completed / task.total * width)
+        return _Text("●" * filled + "○" * (width - filled), style="green")
+
 
 _APP_HELP = (
     "Codebase indexer powered by LLM\n\n"
@@ -276,15 +297,34 @@ def stats(
     page_size = int(os.environ.get("SOURCEMAP_PAGE_SIZE", "20"))
 
     output = index_yaml_path(project_root)
-    walk_result = run_walk(project_root, output)
-    if isinstance(walk_result, Left):
-        typer.echo(f"Error: {walk_result.error}", err=True)
-        raise typer.Exit(1)
-    repo = _open_repo(project_root)
-    sync_result = run_sync(output, repo)
-    if isinstance(sync_result, Left):
-        typer.echo(f"Error: {sync_result.error}", err=True)
-        raise typer.Exit(1)
+    console = _Console()
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        _DotBarColumn(),
+        MofNCompleteColumn(),
+        console=console,
+        transient=True,
+    ) as prog:
+        task_scan = prog.add_task("Scanning files...", total=None)
+        walk_result = run_walk(project_root, output)
+        if isinstance(walk_result, Left):
+            typer.echo(f"Error: {walk_result.error}", err=True)
+            raise typer.Exit(1)
+        file_count = walk_result.value
+        prog.update(task_scan, visible=False)
+
+        task_sync = prog.add_task("Indexing...", total=file_count)
+        repo = _open_repo(project_root)
+        sync_result = run_sync(
+            output,
+            repo,
+            on_progress=lambda cur, _tot: prog.update(task_sync, completed=cur),
+        )
+        if isinstance(sync_result, Left):
+            typer.echo(f"Error: {sync_result.error}", err=True)
+            raise typer.Exit(1)
+
     report = sync_result.value
     if report.inserted or report.updated or report.soft_deleted:
         typer.echo(

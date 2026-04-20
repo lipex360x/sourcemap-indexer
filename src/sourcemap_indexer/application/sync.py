@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -39,22 +40,29 @@ def _load_index(index_path: Path) -> Either[str, dict[str, Any]]:
         return left(f"index-read-error: {error}")
 
 
-def run_sync(index_path: Path, repository: ItemRepository) -> Either[str, SyncReport]:
+def run_sync(
+    index_path: Path,
+    repository: ItemRepository,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> Either[str, SyncReport]:
     load_result = _load_index(index_path)
     if isinstance(load_result, Left):
         return load_result
     data = load_result.value
 
     files: list[dict[str, Any]] = data.get("files", [])
+    total = len(files)
     inserted = 0
     updated = 0
     unchanged = 0
     now = int(time.time())
 
     yaml_paths: set[str] = set()
-    for entry in files:
+    for idx, entry in enumerate(files, start=1):
         file_path: str = entry["path"]
         yaml_paths.add(file_path)
+        if on_progress is not None:
+            on_progress(idx, total)
         new_hash = ContentHash(str(entry["content_hash"]))
         language = Language(str(entry["language"]))
 
