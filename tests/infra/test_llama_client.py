@@ -47,6 +47,8 @@ def test_llm_config_defaults() -> None:
 
 
 def test_from_environ_reads_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://host/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "my-model")
     monkeypatch.setenv("SOURCEMAP_LLM_API_KEY", "test-secret-key")
     config = from_environ()
     assert config.api_key == "test-secret-key"
@@ -103,26 +105,37 @@ def test_content_is_truncated_when_exceeds_max_chars() -> None:
 
 def test_from_environ_reads_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://myhost:9999/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "my-model")
     config = from_environ()
     assert config.url == "http://myhost:9999/v1/chat/completions"
 
 
 def test_from_environ_reads_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://host/v1/chat/completions")
     monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "my-custom-model")
     config = from_environ()
     assert config.model == "my-custom-model"
 
 
-def test_from_environ_uses_defaults_when_env_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_from_environ_raises_when_url_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "my-model")
+    with pytest.raises(KeyError):
+        from_environ()
+
+
+def test_from_environ_raises_when_model_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://host/v1/chat/completions")
     monkeypatch.delenv("SOURCEMAP_LLM_MODEL", raising=False)
-    config = from_environ()
-    assert isinstance(config.url, str)
-    assert isinstance(config.model, str)
+    with pytest.raises(KeyError):
+        from_environ()
 
 
-def test_is_llm_configured_returns_true_when_url_set(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_is_llm_configured_returns_true_when_url_and_model_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://myhost/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "my-model")
     from sourcemap_indexer.infra.llama_client import is_llm_configured
 
     assert is_llm_configured() is True
@@ -130,6 +143,15 @@ def test_is_llm_configured_returns_true_when_url_set(monkeypatch: pytest.MonkeyP
 
 def test_is_llm_configured_returns_false_when_url_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "my-model")
+    from sourcemap_indexer.infra.llama_client import is_llm_configured
+
+    assert is_llm_configured() is False
+
+
+def test_is_llm_configured_returns_false_when_model_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://myhost/v1/chat/completions")
+    monkeypatch.delenv("SOURCEMAP_LLM_MODEL", raising=False)
     from sourcemap_indexer.infra.llama_client import is_llm_configured
 
     assert is_llm_configured() is False

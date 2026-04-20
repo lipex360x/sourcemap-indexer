@@ -293,7 +293,6 @@ def stats(
 ) -> None:
     project_root = _resolve_root(root)
     load_dotenv(project_root / ".env")
-    llm = from_environ()
     page_size = int(os.environ.get("SOURCEMAP_PAGE_SIZE", "20"))
 
     output = index_yaml_path(project_root)
@@ -353,6 +352,7 @@ def stats(
 
     typer.echo(sep)
     if is_llm_configured():
+        llm = from_environ()
         typer.echo(f"  Model: {llm.model}  ({llm.url})")
     else:
         typer.echo("  LLM: not configured")

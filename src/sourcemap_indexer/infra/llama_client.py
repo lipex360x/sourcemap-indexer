@@ -54,13 +54,13 @@ class EnrichmentResult:
 
 
 def is_llm_configured() -> bool:
-    return "SOURCEMAP_LLM_URL" in os.environ
+    return "SOURCEMAP_LLM_URL" in os.environ and "SOURCEMAP_LLM_MODEL" in os.environ
 
 
 def from_environ() -> LlmConfig:
     return LlmConfig(
-        url=os.environ.get("SOURCEMAP_LLM_URL", LlmConfig.url),
-        model=os.environ.get("SOURCEMAP_LLM_MODEL", LlmConfig.model),
+        url=os.environ["SOURCEMAP_LLM_URL"],
+        model=os.environ["SOURCEMAP_LLM_MODEL"],
         api_key=os.environ.get("SOURCEMAP_LLM_API_KEY", LlmConfig.api_key),
     )
 
