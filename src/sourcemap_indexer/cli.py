@@ -14,7 +14,7 @@ import typer
 from sourcemap_indexer.application.enrich import run_enrich
 from sourcemap_indexer.application.sync import run_sync
 from sourcemap_indexer.application.walk import run_walk
-from sourcemap_indexer.config import db_path, find_project_root, index_yaml_path
+from sourcemap_indexer.config import db_path, find_project_root, index_yaml_path, maps_dir
 from sourcemap_indexer.domain.value_objects import Language, Layer
 from sourcemap_indexer.infra.dotenv import load_dotenv
 from sourcemap_indexer.infra.llama_client import LlamaClient, from_environ
@@ -58,11 +58,11 @@ def _open_repo(root: Path) -> SqliteItemRepository:
     return SqliteItemRepository(result.value)
 
 
-@app.command(help="Create .docs/maps/ directory and initialize the SQLite index.")
+@app.command(help="Create the maps output directory and initialize the SQLite index.")
 def init(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
-    maps_dir = project_root / ".docs" / "maps"
-    maps_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = maps_dir(project_root)
+    output_dir.mkdir(parents=True, exist_ok=True)
     ignore_file = project_root / ".sourcemapignore"
     if not ignore_file.exists():
         ignore_file.write_text(_DEFAULT_SOURCEMAPIGNORE, encoding="utf-8")
@@ -338,10 +338,10 @@ def stale(root: str | None = typer.Option(None, help="Project root")) -> None:
 @app.command(help="Delete the index (offers a timestamped backup before wiping).")
 def reset(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
-    maps_dir = project_root / ".docs" / "maps"
+    output_dir = maps_dir(project_root)
     db_file = db_path(project_root)
     index_yaml = index_yaml_path(project_root)
-    if not maps_dir.exists():
+    if not output_dir.exists():
         typer.echo("Error: index not found. Nothing to reset.", err=True)
         raise typer.Exit(1)
     typer.echo(
@@ -353,7 +353,7 @@ def reset(root: str | None = typer.Option(None, help="Project root")) -> None:
         return
     if db_file.exists() and typer.confirm("Backup current database?", default=True):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup = maps_dir / f"index.{timestamp}.bak"
+        backup = output_dir / f"index.{timestamp}.bak"
         shutil.copy2(db_file, backup)
         typer.echo(f"Backup saved: {backup.name}")
     if db_file.exists():
@@ -366,11 +366,11 @@ def reset(root: str | None = typer.Option(None, help="Project root")) -> None:
 @app.command(help="Restore index.db from a previously saved .bak file.")
 def restore(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
-    maps_dir = project_root / ".docs" / "maps"
-    if not maps_dir.exists():
+    output_dir = maps_dir(project_root)
+    if not output_dir.exists():
         typer.echo("Error: no maps directory found.", err=True)
         raise typer.Exit(1)
-    backups = sorted(maps_dir.glob("index.*.bak"), reverse=True)
+    backups = sorted(output_dir.glob("index.*.bak"), reverse=True)
     if not backups:
         typer.echo("No backups found.")
         return

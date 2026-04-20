@@ -142,6 +142,50 @@ def test_find_needs_llm_respects_limit() -> None:
     assert len(result.value) == 2
 
 
+def _enrich(item: Item, layer: Layer) -> Item:
+    return item.with_llm_enrichment(
+        purpose="p",
+        layer=layer,
+        stability=Stability.STABLE,
+        tags=frozenset(),
+        side_effects=frozenset(),
+        invariants=(),
+        llm_at=0,
+    )
+
+
+def test_find_needs_llm_filters_by_layer() -> None:
+    repo = _make_repo()
+    repo.upsert(_enrich(_make_item(path="domain.py"), Layer.DOMAIN))
+    repo.upsert(_enrich(_make_item(path="infra.py"), Layer.INFRA))
+    result = repo.find_needs_llm(force=True, layer=Layer.DOMAIN)
+    assert isinstance(result, Right)
+    paths = [i.path for i in result.value]
+    assert "domain.py" in paths
+    assert "infra.py" not in paths
+
+
+def test_find_needs_llm_filters_by_language() -> None:
+    repo = _make_repo()
+    repo.upsert(_make_item(path="app.py", language=Language.PY))
+    repo.upsert(_make_item(path="app.ts", language=Language.TS))
+    result = repo.find_needs_llm(language=Language.PY)
+    assert isinstance(result, Right)
+    paths = [i.path for i in result.value]
+    assert "app.py" in paths
+    assert "app.ts" not in paths
+
+
+def test_find_needs_llm_filters_by_path() -> None:
+    repo = _make_repo()
+    repo.upsert(_make_item(path="src/auth.py"))
+    repo.upsert(_make_item(path="src/main.py"))
+    result = repo.find_needs_llm(path="src/auth.py")
+    assert isinstance(result, Right)
+    paths = [i.path for i in result.value]
+    assert paths == ["src/auth.py"]
+
+
 def test_find_all_paths_returns_active_paths() -> None:
     repo = _make_repo()
     repo.upsert(_make_item(path="x.py"))

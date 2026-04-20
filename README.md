@@ -226,6 +226,7 @@ sourcemap stats   # overview: total, enriched, pending
 | `SOURCEMAP_LLM_MODEL` | `qwen/qwen3-coder-30b` | Model name passed to the endpoint |
 | `SOURCEMAP_LLM_API_KEY` | _(empty)_ | Bearer token for authenticated providers |
 | `SOURCEMAP_PAGE_SIZE` | `20` | Number of pending files shown per page in `stats` |
+| `SOURCEMAP_MAPS_DIR` | `.docs/maps` | Output directory for `index.db` and `index.yaml` (relative to project root or absolute) |
 
 `sourcemap enrich` automatically reads a `.env` file from the project root before resolving env vars:
 

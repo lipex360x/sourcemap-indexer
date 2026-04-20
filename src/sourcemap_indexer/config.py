@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from sourcemap_indexer.lib.either import Either, left, right
+
+_DEFAULT_MAPS_DIR = ".docs/maps"
 
 
 def find_project_root(start: Path) -> Either[str, Path]:
@@ -16,9 +19,17 @@ def find_project_root(start: Path) -> Either[str, Path]:
         current = parent
 
 
+def maps_dir(root: Path) -> Path:
+    custom = os.environ.get("SOURCEMAP_MAPS_DIR", "")
+    if custom:
+        custom_path = Path(custom)
+        return custom_path if custom_path.is_absolute() else root / custom_path
+    return root / _DEFAULT_MAPS_DIR
+
+
 def db_path(root: Path) -> Path:
-    return root / ".docs" / "maps" / "index.db"
+    return maps_dir(root) / "index.db"
 
 
 def index_yaml_path(root: Path) -> Path:
-    return root / ".docs" / "maps" / "index.yaml"
+    return maps_dir(root) / "index.yaml"
