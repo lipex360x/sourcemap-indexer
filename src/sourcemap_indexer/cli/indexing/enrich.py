@@ -197,14 +197,12 @@ def _run_enrich_session(
     sync_result = run_sync(index_path, repo)
     pre_sync_report = sync_result.value if not isinstance(sync_result, Left) else None
     prog.update(task_scan, visible=False)
-    if pre_sync_report is not None:
-        new_ct = pre_sync_report.inserted + pre_sync_report.updated
-        enrich_desc = f"Enriching  {new_ct} files"
-    else:
-        enrich_desc = "Enriching..."
-    prog.update(task_enrich, visible=True, description=enrich_desc)
+    prog.update(task_enrich, visible=True, description="Enriching...")
 
     def _progress(path: str, success: bool, current: int, total: int) -> None:
+        if current == 1:
+            label = "file" if total == 1 else "files"
+            prog.update(task_enrich, description=f"Enriching  {total} {label}")
         prog.update(task_enrich, completed=current, total=total, file=path)
 
     started = time.perf_counter()
