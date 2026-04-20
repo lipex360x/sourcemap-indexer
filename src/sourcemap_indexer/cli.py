@@ -16,13 +16,14 @@ from rich.panel import Panel as _Panel
 from sourcemap_indexer.application.enrich import run_enrich
 from sourcemap_indexer.application.sync import run_sync
 from sourcemap_indexer.application.walk import run_walk
-from sourcemap_indexer.config import db_path, find_project_root, index_yaml_path, maps_dir
+from sourcemap_indexer.config import db_path, find_project_root, index_yaml_path, logs_dir, maps_dir
 from sourcemap_indexer.domain.value_objects import Language, Layer
 from sourcemap_indexer.infra.dotenv import load_dotenv
 from sourcemap_indexer.infra.llama_client import LlamaClient, from_environ, is_llm_configured
 from sourcemap_indexer.infra.migrator import init_db
 from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
 from sourcemap_indexer.lib.either import Left
+from sourcemap_indexer.lib.llm_log import create_llm_log
 
 _APP_HELP = (
     "Codebase indexer powered by LLM\n\n"
@@ -149,7 +150,8 @@ def enrich(
         raise typer.Exit(1)
     repo = _open_repo(project_root)
     config = from_environ()
-    client = LlamaClient(config)
+    llm_log = create_llm_log(logs_dir(project_root))
+    client = LlamaClient(config, llm_log=llm_log)
     typer.echo(f"Model: {config.model}  ({config.url})")
     if message:
         typer.echo(f"Instruction: {message}")

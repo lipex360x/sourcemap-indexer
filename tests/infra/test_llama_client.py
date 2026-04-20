@@ -13,6 +13,7 @@ from sourcemap_indexer.infra.llama_client import (
     from_environ,
 )
 from sourcemap_indexer.lib.either import Left, Right
+from sourcemap_indexer.lib.llm_log import LlmLog
 
 _VALID_PAYLOAD = {
     "purpose": "Validates JWT tokens",
@@ -282,4 +283,76 @@ def test_ping_returns_right_on_any_http_status() -> None:
     http_client = httpx.Client(transport=transport)
     client = LlamaClient(LlmConfig(), http_client=http_client)
     result = client.ping()
+    assert isinstance(result, Right)
+
+
+class _CaptureLlmLog:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    def record(
+        self,
+        *,
+        path: str,
+        language: str,
+        model: str,
+        messages: list[dict[str, str]],
+        response_raw: str,
+        result: str,
+    ) -> None:
+        self.calls.append(
+            {
+                "path": path,
+                "language": language,
+                "model": model,
+                "messages": messages,
+                "response_raw": response_raw,
+                "result": result,
+            }
+        )
+
+
+def _assert_is_llm_log(log: object) -> None:
+    assert isinstance(log, LlmLog)
+
+
+def test_enrich_calls_llm_log_on_success() -> None:
+    spy = _CaptureLlmLog()
+    _assert_is_llm_log(spy)
+    transport = httpx.MockTransport(lambda _r: _mock_response(_VALID_PAYLOAD))
+    client = LlamaClient(LlmConfig(), http_client=httpx.Client(transport=transport), llm_log=spy)
+    client.enrich("src/auth.py", Language.PY, "code")
+    assert len(spy.calls) == 1
+    assert spy.calls[0]["path"] == "src/auth.py"
+    assert spy.calls[0]["result"] == "ok"
+    assert "Validates JWT tokens" in spy.calls[0]["response_raw"]
+
+
+def test_enrich_calls_llm_log_on_http_error() -> None:
+    spy = _CaptureLlmLog()
+    transport = httpx.MockTransport(lambda _r: httpx.Response(500, text="err"))
+    client = LlamaClient(LlmConfig(), http_client=httpx.Client(transport=transport), llm_log=spy)
+    client.enrich("src/f.py", Language.PY, "code")
+    assert len(spy.calls) == 1
+    assert spy.calls[0]["result"] == "llm-http-error: 500"
+
+
+def test_enrich_calls_llm_log_on_timeout() -> None:
+    spy = _CaptureLlmLog()
+
+    def raise_timeout(request: httpx.Request) -> httpx.Response:
+        raise httpx.TimeoutException("timed out", request=request)
+
+    transport = httpx.MockTransport(raise_timeout)
+    client = LlamaClient(LlmConfig(), http_client=httpx.Client(transport=transport), llm_log=spy)
+    client.enrich("src/f.py", Language.PY, "code")
+    assert len(spy.calls) == 1
+    assert spy.calls[0]["result"] == "llm-timeout"
+    assert spy.calls[0]["response_raw"] == ""
+
+
+def test_enrich_without_llm_log_still_works() -> None:
+    transport = httpx.MockTransport(lambda _r: _mock_response(_VALID_PAYLOAD))
+    client = LlamaClient(LlmConfig(), http_client=httpx.Client(transport=transport))
+    result = client.enrich("src/f.py", Language.PY, "code")
     assert isinstance(result, Right)
