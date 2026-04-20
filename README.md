@@ -22,6 +22,7 @@
 | 10 | [Post-commit hook](#hook) |
 | 11 | [SQLite schema](#schema) |
 | 12 | [Dev setup](#dev) |
+| 13 | [Walk-only analysis](#profile) |
 
 ---
 
@@ -207,6 +208,7 @@ sourcemap stats   # overview: total, enriched, pending
 
 | Command | Description |
 |---------|-------------|
+| `sourcemap profile` | Structural overview from walk data only — language distribution, inferred layers, test ratio, top files by size |
 | `sourcemap stats [--page N]` | Total, enriched, and pending counts by layer and language + pending file list |
 | `sourcemap overview` | Layer × language matrix |
 | `sourcemap domain` | Enriched domain-layer files with their purpose |
@@ -402,5 +404,30 @@ cd sourcemap-indexer
 uv sync
 uv run pytest
 ```
+
+[↑ back to top](#topo)
+
+---
+
+<a id="profile"></a>
+
+## 13. Walk-only analysis
+
+`sourcemap profile` gives a structural overview of any indexed project using only walk data — no LLM required:
+
+```bash
+sourcemap walk    # index the files
+sourcemap profile # analyse the structure
+```
+
+Output includes:
+
+- **Stack** — language distribution by file count and line count
+- **Inferred layers** — architectural breakdown derived from directory names (`tests/`, `domain/`, `infra/`, `application/`, `lib/`, `scripts/`)
+- **Test ratio** — source files vs test files (line count and a health indicator)
+- **Top files by complexity** — largest files by line count
+
+> [!NOTE]
+> Layer inference is purely path-based — it does not require `sourcemap enrich`. After enrichment, use `sourcemap overview` for LLM-assigned layers instead.
 
 [↑ back to top](#topo)

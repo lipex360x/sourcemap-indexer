@@ -294,6 +294,32 @@ def test_unstable_no_results_before_enrich(tmp_path: Path) -> None:
     assert "no results" in result.output
 
 
+def test_profile_runs_after_walk(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["profile", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Stack" in result.output
+    assert "py" in result.output
+    assert "Top files" in result.output
+
+
+def test_profile_shows_test_ratio(tmp_path: Path) -> None:
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_app.py").write_text("def test_x(): pass\n")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("def run(): pass\n")
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["walk", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["profile", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Test ratio" in result.output
+
+
+def test_profile_fails_without_index(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["profile", "--root", str(tmp_path / "missing")])
+    assert result.exit_code != 0
+
+
 def test_reset_confirmed_deletes_db(tmp_path: Path) -> None:
     _init_sync(tmp_path)
     db_file = tmp_path / ".docs" / "maps" / "index.db"
