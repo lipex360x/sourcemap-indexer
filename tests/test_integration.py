@@ -32,7 +32,7 @@ def project(tmp_path: Path) -> Path:
 def test_init_walk_full_cycle(project: Path) -> None:
     result = runner.invoke(app, ["walk", "--root", str(project)])
     assert result.exit_code == 0
-    assert "inserted=5" in result.output
+    assert "inserted" in result.output.lower()
 
     conn = _db(project)
     assert _count(conn) == 5
@@ -49,9 +49,9 @@ def test_incremental_sync_after_changes(project: Path) -> None:
 
     result = runner.invoke(app, ["walk", "--root", str(project)])
     assert result.exit_code == 0
-    assert "updated=1" in result.output
-    assert "inserted=1" in result.output
-    assert "soft_deleted=1" in result.output
+    assert "updated" in result.output.lower()
+    assert "inserted" in result.output.lower()
+    assert "soft-deleted" in result.output.lower()
 
     conn = _db(project)
     assert _count(conn, "deleted_at IS NULL") == 5

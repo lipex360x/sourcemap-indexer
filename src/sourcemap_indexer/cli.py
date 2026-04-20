@@ -116,20 +116,38 @@ def walk(root: str | None = typer.Option(None, help="Project root")) -> None:
     project_root = _resolve_root(root)
     output = index_yaml_path(project_root)
     repo = _open_repo(project_root)
+    console = _Console()
+
+    walk_start = time.perf_counter()
     walk_result = run_walk(project_root, output, known_files=repo.load_known_files())
+    walk_elapsed = time.perf_counter() - walk_start
+
     if isinstance(walk_result, Left):
         typer.echo(f"Error: {walk_result.error}", err=True)
         raise typer.Exit(1)
-    typer.echo(f"Walked {walk_result.value} files → {output}")
+
+    sync_start = time.perf_counter()
     sync_result = run_sync(output, repo)
+    sync_elapsed = time.perf_counter() - sync_start
+
     if isinstance(sync_result, Left):
         typer.echo(f"Error: {sync_result.error}", err=True)
         raise typer.Exit(1)
+
     report = sync_result.value
-    typer.echo(
-        f"Sync: inserted={report.inserted} updated={report.updated} "
-        f"soft_deleted={report.soft_deleted} unchanged={report.unchanged}"
+    walk_body = (
+        f"  [bold]Root[/bold]   {project_root}\n"
+        f"  [bold]Files[/bold]  {walk_result.value}  [dim]scanned in {walk_elapsed:.2f}s[/dim]"
     )
+    console.print(_Panel(walk_body, title="Walk", border_style="bright_blue", title_align="left"))
+    sync_body = (
+        f"  [bold]Inserted[/bold]      {report.inserted}\n"
+        f"  [bold]Updated[/bold]       {report.updated}\n"
+        f"  [bold]Soft-deleted[/bold]  {report.soft_deleted}\n"
+        f"  [bold]Unchanged[/bold]     {report.unchanged}  "
+        f"[dim]synced in {sync_elapsed:.2f}s[/dim]"
+    )
+    console.print(_Panel(sync_body, title="Sync", border_style="bright_blue", title_align="left"))
 
 
 @app.command(help="Import index.yaml into the SQLite database (insert / update / soft-delete).")
@@ -420,7 +438,7 @@ def stats(
         f"  [bold]Pending[/bold]: {pending}\n"
         f"{dot_bar}  {pct}%"
     )
-    console.print(_Panel(summary, title="Stats", border_style="blue", title_align="left"))
+    console.print(_Panel(summary, title="Stats", border_style="bright_blue", title_align="left"))
 
     col = max((len(k) for k in by_layer), default=0)
     top = max(by_layer.values(), default=1)
@@ -432,7 +450,7 @@ def stats(
         _Panel(
             layer_rows or "[dim](no data)[/dim]",
             title="By layer",
-            border_style="blue",
+            border_style="bright_blue",
             title_align="left",
         )
     )
@@ -451,7 +469,7 @@ def stats(
         _Panel(
             lang_rows or "[dim](no data)[/dim]",
             title="By language",
-            border_style="blue",
+            border_style="bright_blue",
             title_align="left",
         )
     )
