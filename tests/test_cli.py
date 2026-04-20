@@ -54,7 +54,7 @@ def test_walk_also_syncs_db(tmp_path: Path) -> None:
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     result = runner.invoke(app, ["walk", "--root", str(tmp_path)])
     assert result.exit_code == 0
-    assert "inserted" in result.output
+    assert "inserted" in result.output.lower()
 
 
 def test_walk_error_exits(tmp_path: Path) -> None:
