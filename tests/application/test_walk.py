@@ -123,3 +123,16 @@ def test_run_walk_skips_read_when_known_files_match(
 
     assert isinstance(result, Right)
     assert read_count == 0
+
+
+def test_run_walk_ignores_output_dir_dynamically(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text("x = 1\n")
+    output = tmp_path / ".myoutput" / "maps" / "index.yaml"
+    (tmp_path / ".myoutput" / "maps").mkdir(parents=True)
+    (tmp_path / ".myoutput" / "maps" / "index.db").write_text("")
+    result = run_walk(tmp_path, output)
+    assert isinstance(result, Right)
+    data = yaml.safe_load(output.read_text())
+    paths = [f["path"] for f in data["files"]]
+    assert not any(p.startswith(".myoutput") for p in paths)
+    assert "main.py" in paths

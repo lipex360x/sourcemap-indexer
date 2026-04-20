@@ -5,9 +5,14 @@ from pathlib import Path
 
 import typer
 from rich.console import Console as _Console
-from rich.panel import Panel as _Panel
+from rich.console import Group as _Group
+from rich.live import Live as _Live
+from rich.progress import MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 
 from sourcemap_indexer.application.enrich import run_enrich
+from sourcemap_indexer.application.sync import run_sync
+from sourcemap_indexer.application.walk import run_walk
+from sourcemap_indexer.cli._rendering import _HybridProgressColumn, _panel
 from sourcemap_indexer.cli._shared import (
     _FILE_HELP,
     _LANG_HELP,
@@ -18,12 +23,17 @@ from sourcemap_indexer.cli._shared import (
     _resolve_root,
     app,
 )
-from sourcemap_indexer.config import default_prompt_export_path, import_prompt_path, logs_dir
+from sourcemap_indexer.config import (
+    default_prompt_export_path,
+    import_prompt_path,
+    index_yaml_path,
+    logs_dir,
+)
 from sourcemap_indexer.domain.value_objects import Language, Layer
 from sourcemap_indexer.infra.dotenv import load_dotenv
-from sourcemap_indexer.infra.llama_client import (
+from sourcemap_indexer.infra.llm_client import (
     SYSTEM_PROMPT,
-    LlamaClient,
+    LlmClient,
     from_environ,
     is_llm_configured,
 )
@@ -82,24 +92,18 @@ def enrich(
 
     if not is_llm_configured():
         _Console(stderr=True).print(
-            _Panel(
+            _panel(
                 "LLM not configured.\n"
                 "Set [bold]SOURCEMAP_LLM_URL[/bold] in your environment or [bold].env[/bold] file.",
                 title="Error",
-                border_style="red",
-                title_align="left",
+                style="error",
             )
         )
         raise typer.Exit(1)
     repo = _open_repo(project_root)
     config = from_environ()
     llm_log = create_llm_log(logs_dir(project_root))
-    client = LlamaClient(config, llm_log=llm_log, system_prompt=custom_prompt)
-    typer.echo(f"Model: {config.model}  ({config.url})")
-    if import_path is not None:
-        typer.echo(f"Prompt: {import_path}")
-    if message:
-        typer.echo(f"Instruction: {message}")
+    client = LlmClient(config, llm_log=llm_log, system_prompt=custom_prompt)
     ping_result = client.ping()
     if isinstance(ping_result, Left):
         typer.echo(f"Error: LLM unreachable — {ping_result.error}", err=True)
@@ -111,40 +115,87 @@ def enrich(
     if file:
         force = True
 
-    def _progress(path: str, success: bool, current: int, total: int) -> None:
-        bar_width = 20
-        filled = round(current / total * bar_width) if total else 0
-        bar = "█" * filled + "░" * (bar_width - filled)
-        pct = round(current / total * 100) if total else 0
-        pad = len(str(total))
-        symbol = "✓" if success else "✗"
-        typer.echo(f"  [{current:>{pad}}/{total}] [{bar}] {pct:>3}%  {symbol} {path}")
+    console = _Console()
+    header_parts = [f"[bold]Model[/bold]  {config.model}  [dim]({config.url})[/dim]"]
+    if import_path is not None:
+        header_parts.append(f"[bold]Prompt[/bold]  {import_path}")
+    if message:
+        header_parts.append(f"[bold]Instruction[/bold]  {message}")
+    header = "\n".join(header_parts)
 
-    started = time.perf_counter()
-    enrich_result = run_enrich(
-        project_root,
-        repo,
-        client,
-        batch_limit=limit,
-        on_progress=_progress,
-        force=force,
-        layer_filter=layer_val,
-        language_filter=language_val,
-        extra_instruction=message,
-        path_filter=file,
+    index_path = index_yaml_path(project_root)
+
+    prog = Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        _HybridProgressColumn(),
+        MofNCompleteColumn(),
+        TextColumn("[dim]{task.fields[file]}[/dim]"),
+        refresh_per_second=20,
     )
-    elapsed = time.perf_counter() - started
-    if isinstance(enrich_result, Left):
-        typer.echo(f"Error: {enrich_result.error}", err=True)
-        raise typer.Exit(1)
-    report = enrich_result.value
-    typer.echo(
-        f"\nEnrich: enriched={report.enriched} failed={report.failed} skipped={report.skipped}"
-        f" elapsed={elapsed:.1f}s"
-    )
-    for error in report.errors:
-        typer.echo(f"  ! {error}", err=True)
-    typer.echo("")
+    task_scan = prog.add_task("Scanning...", total=None, file="")
+    task_enrich = prog.add_task("Enriching...", total=None, file="", visible=False)
+
+    with _Live(
+        _panel(_Group(header, prog), "Enrich"),
+        console=console,
+        refresh_per_second=20,
+        transient=False,
+    ) as live:
+        walk_result = run_walk(project_root, index_path, known_files=repo.load_known_files())
+        if isinstance(walk_result, Left):
+            typer.echo(f"Error: {walk_result.error}", err=True)
+            raise typer.Exit(1)
+
+        sync_result = run_sync(index_path, repo)
+        pre_sync_report = sync_result.value if not isinstance(sync_result, Left) else None
+
+        prog.update(task_scan, visible=False)
+        prog.update(task_enrich, visible=True)
+
+        def _progress(path: str, success: bool, current: int, total: int) -> None:
+            prog.update(task_enrich, completed=current, total=total, file=path)
+
+        started = time.perf_counter()
+        enrich_result = run_enrich(
+            project_root,
+            repo,
+            client,
+            batch_limit=limit,
+            on_progress=_progress,
+            force=force,
+            layer_filter=layer_val,
+            language_filter=language_val,
+            extra_instruction=message,
+            path_filter=file,
+        )
+        elapsed = time.perf_counter() - started
+
+        if isinstance(enrich_result, Left):
+            typer.echo(f"Error: {enrich_result.error}", err=True)
+            raise typer.Exit(1)
+
+        report = enrich_result.value
+        summary_lines = [
+            f"[bold]Enriched[/bold]: {report.enriched}   "
+            f"[bold]Failed[/bold]: {report.failed}   "
+            f"[bold]Skipped[/bold]: {report.skipped}   "
+            f"[bold]Elapsed[/bold]: {elapsed:.1f}s"
+        ]
+        for error in report.errors:
+            summary_lines.append(f"[red]![/red] {error}")
+
+        if pre_sync_report is not None and (
+            pre_sync_report.inserted or pre_sync_report.updated or pre_sync_report.soft_deleted
+        ):
+            summary_lines.append(
+                f"[bold]Inserted[/bold]: {pre_sync_report.inserted}   "
+                f"[bold]Updated[/bold]: {pre_sync_report.updated}   "
+                f"[bold]Soft-deleted[/bold]: {pre_sync_report.soft_deleted}"
+            )
+
+        panel_style = "warn" if report.failed > 0 else "info"
+        live.update(_panel(_Group(header, "\n".join(summary_lines)), "Enrich", style=panel_style))
 
     from sourcemap_indexer.cli.insights.stats import stats  # noqa: PLC0415
 

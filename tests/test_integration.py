@@ -66,7 +66,7 @@ def test_enrich_with_fake_client(project: Path, monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
     monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
-    monkeypatch.setattr(cli_module.LlamaClient, "ping", lambda _self: right(None))
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: right(None))
     monkeypatch.setattr(
         "sourcemap_indexer.cli.indexing.enrich.run_enrich",
         lambda *_args, **_kwargs: right(EnrichReport(enriched=5, failed=0, skipped=0, errors=())),
@@ -76,7 +76,7 @@ def test_enrich_with_fake_client(project: Path, monkeypatch: pytest.MonkeyPatch)
 
     result = runner.invoke(app, ["enrich", "--root", str(project)])
     assert result.exit_code == 0
-    assert "enriched=5" in result.output
+    assert "Enriched" in result.output
 
 
 def test_find_after_walk(project: Path) -> None:

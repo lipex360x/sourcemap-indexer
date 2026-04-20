@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Protocol
 
 from sourcemap_indexer.domain.repository import ItemRepository
-from sourcemap_indexer.domain.value_objects import Language, Layer
-from sourcemap_indexer.infra.llama_client import EnrichmentResult
+from sourcemap_indexer.domain.value_objects import Language, Layer, Stability
+from sourcemap_indexer.infra.llm_client import EnrichmentResult
 from sourcemap_indexer.lib.either import Either, Left, right
 
 
@@ -70,6 +70,30 @@ def run_enrich(
             errors.append(f"read-error: {item.path}")
             if on_progress:
                 on_progress(item.path, False, done, total_items)
+            continue
+
+        if item.size_bytes == 0:
+            stub = item.with_llm_enrichment(
+                purpose="Empty file",
+                layer=Layer.UNKNOWN,
+                stability=Stability.UNKNOWN,
+                tags=frozenset({"empty-file"}),
+                side_effects=frozenset(),
+                invariants=(),
+                llm_at=now,
+            )
+            upsert_result = repository.upsert(stub)
+            if isinstance(upsert_result, Left):
+                failed += 1
+                done += 1
+                errors.append(f"{upsert_result.error}: {item.path}")
+                if on_progress:
+                    on_progress(item.path, False, done, total_items)
+                continue
+            enriched += 1
+            done += 1
+            if on_progress:
+                on_progress(item.path, True, done, total_items)
             continue
 
         enrich_result = client.enrich(item.path, item.language, content, extra_instruction)

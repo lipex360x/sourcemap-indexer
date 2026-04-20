@@ -12,7 +12,7 @@ from sourcemap_indexer.domain.value_objects import (
     Layer,
     Stability,
 )
-from sourcemap_indexer.infra.llama_client import EnrichmentResult
+from sourcemap_indexer.infra.llm_client import EnrichmentResult
 from sourcemap_indexer.infra.migrator import init_db
 from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
 from sourcemap_indexer.lib.either import Either, Right, left, right
@@ -212,3 +212,77 @@ def test_on_progress_callback_reports_failure(tmp_path: Path) -> None:
     client = _stub(left("llm-timeout"))
     run_enrich(tmp_path, repo, client, on_progress=_cb)  # type: ignore[arg-type]
     assert calls == [("app.py", False, 1, 1)]
+
+
+def _make_empty_item(path: str, root: Path) -> Item:
+    return Item(
+        id=ItemId.generate(),
+        path=path,
+        name=path.split("/")[-1],
+        language=Language.PY,
+        lines=0,
+        size_bytes=0,
+        content_hash=ContentHash("a" * 64),
+        last_modified=int(time.time()),
+        needs_llm=True,
+        created_at=int(time.time()),
+        updated_at=int(time.time()),
+    )
+
+
+def test_empty_file_skips_llm_call(tmp_path: Path) -> None:
+    repo = _make_repo()
+    item = _make_empty_item("empty.py", tmp_path)
+    (tmp_path / "empty.py").write_bytes(b"")
+    repo.upsert(item)
+    called = []
+
+    class _TrackingClient:
+        def enrich(
+            self,
+            path: str,
+            language: Language,
+            content: str,
+            extra_instruction: str | None = None,
+        ) -> Either[str, EnrichmentResult]:
+            called.append(path)
+            return right(_VALID_RESULT)
+
+    run_enrich(tmp_path, repo, _TrackingClient())  # type: ignore[arg-type]
+    assert called == []
+
+
+def test_empty_file_counted_as_enriched(tmp_path: Path) -> None:
+    repo = _make_repo()
+    item = _make_empty_item("empty.py", tmp_path)
+    (tmp_path / "empty.py").write_bytes(b"")
+    repo.upsert(item)
+    result = run_enrich(tmp_path, repo, _stub(right(_VALID_RESULT)))  # type: ignore[arg-type]
+    assert isinstance(result, Right)
+    assert result.value.enriched == 1
+    assert result.value.failed == 0
+
+
+def test_empty_file_sets_needs_llm_false(tmp_path: Path) -> None:
+    repo = _make_repo()
+    item = _make_empty_item("empty.py", tmp_path)
+    (tmp_path / "empty.py").write_bytes(b"")
+    repo.upsert(item)
+    run_enrich(tmp_path, repo, _stub(right(_VALID_RESULT)))  # type: ignore[arg-type]
+    found = repo.find_by_path("empty.py")
+    assert isinstance(found, Right)
+    assert found.value is not None
+    assert found.value.needs_llm is False
+
+
+def test_empty_file_saved_with_stub_purpose(tmp_path: Path) -> None:
+    repo = _make_repo()
+    item = _make_empty_item("empty.py", tmp_path)
+    (tmp_path / "empty.py").write_bytes(b"")
+    repo.upsert(item)
+    run_enrich(tmp_path, repo, _stub(right(_VALID_RESULT)))  # type: ignore[arg-type]
+    found = repo.find_by_path("empty.py")
+    assert isinstance(found, Right)
+    assert found.value is not None
+    assert found.value.purpose == "Empty file"
+    assert "empty-file" in found.value.tags

@@ -39,8 +39,11 @@ def detect_language(path: Path) -> Language:
     return _EXT_MAP.get(path.suffix.lower(), Language.OTHER)
 
 
-def load_ignore_patterns(root: Path) -> Either[str, pathspec.PathSpec]:
-    patterns = list(DEFAULT_IGNORE)
+def load_ignore_patterns(
+    root: Path,
+    extra_ignore: list[str] | None = None,
+) -> Either[str, pathspec.PathSpec]:
+    patterns = list(DEFAULT_IGNORE) + list(extra_ignore or [])
     for ignore_file in (root / ".gitignore", root / ".sourcemapignore"):
         if ignore_file.exists():
             try:
@@ -57,8 +60,9 @@ def _count_lines(data: bytes) -> int:
 def walk_project(
     root: Path,
     known_files: dict[str, tuple[int, int, int, str]] | None = None,
+    extra_ignore: list[str] | None = None,
 ) -> Either[str, list[WalkedFile]]:
-    spec_result = load_ignore_patterns(root)
+    spec_result = load_ignore_patterns(root, extra_ignore=extra_ignore)
     if isinstance(spec_result, Left):
         return spec_result
     spec = spec_result.value

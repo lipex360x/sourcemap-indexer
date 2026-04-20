@@ -5,21 +5,22 @@ import os
 
 import typer
 from rich.console import Console as _Console
-from rich.panel import Panel as _Panel
 from rich.progress import MofNCompleteColumn, Progress, SpinnerColumn, TextColumn
 
 from sourcemap_indexer.application.sync import run_sync
 from sourcemap_indexer.application.walk import run_walk
 from sourcemap_indexer.cli._rendering import (
+    _color_legend,
     _DotBarColumn,
     _enriched_bar,
     _lang_color,
+    _panel,
     _proportional_width,
 )
 from sourcemap_indexer.cli._shared import _open_repo, _resolve_root, app
 from sourcemap_indexer.config import index_yaml_path
 from sourcemap_indexer.infra.dotenv import load_dotenv
-from sourcemap_indexer.infra.llama_client import from_environ, is_llm_configured
+from sourcemap_indexer.infra.llm_client import from_environ, is_llm_configured
 from sourcemap_indexer.lib.either import Left
 
 _STATS_HELP = (
@@ -70,10 +71,12 @@ def stats(
 
     report = sync_result.value
     if report.inserted or report.updated or report.soft_deleted:
-        typer.echo(
-            f"Sync: inserted={report.inserted} updated={report.updated} "
-            f"soft_deleted={report.soft_deleted}"
+        sync_body = (
+            f"[bold]Inserted[/bold]: {report.inserted}   "
+            f"[bold]Updated[/bold]: {report.updated}   "
+            f"[bold]Soft-deleted[/bold]: {report.soft_deleted}"
         )
+        console.print(_panel(sync_body, "Sync"))
     all_result = repo.search(tags=None, layer=None, language=None)
     if isinstance(all_result, Left):
         typer.echo(f"Error: {all_result.error}", err=True)
@@ -119,7 +122,7 @@ def stats(
         f"  [bold]Pending[/bold]: {pending}\n"
         f"{dot_bar}  {pct}%"
     )
-    console.print(_Panel(summary, title="Stats", border_style="bright_blue", title_align="left"))
+    console.print(_panel(summary, title="Stats"))
 
     col = max((len(k) for k in by_layer), default=0)
     top = max(by_layer.values(), default=1)
@@ -131,14 +134,7 @@ def stats(
         bar_layer = _enriched_bar(enriched_in_layer, cnt, wid_layer)
         layer_row_list.append(f"  {name:<{col}}  {cnt:>5}  [{clr}]{bar_layer}[/{clr}]")
     layer_rows = "\n".join(layer_row_list)
-    console.print(
-        _Panel(
-            layer_rows or "[dim](no data)[/dim]",
-            title="By layer",
-            border_style="bright_blue",
-            title_align="left",
-        )
-    )
+    console.print(_panel(layer_rows or "[dim](no data)[/dim]", title="By layer"))
 
     col = max((len(k) for k in by_lang), default=0)
     top_lang = max(by_lang.values(), default=1)
@@ -151,14 +147,8 @@ def stats(
             f"  {lang:<{col}}  {cnt:>5}  [{clr}]{_enriched_bar(enriched_in_lang, cnt, wid)}[/{clr}]"
         )
     lang_rows = "\n".join(lang_row_list)
-    console.print(
-        _Panel(
-            lang_rows or "[dim](no data)[/dim]",
-            title="By language",
-            border_style="bright_blue",
-            title_align="left",
-        )
-    )
+    console.print(_panel(lang_rows or "[dim](no data)[/dim]", title="By language"))
+    console.print(_color_legend())
 
     if files and pending_items:
         total_pages = math.ceil(pending / page_size)
@@ -171,11 +161,4 @@ def stats(
         footer = f"\n  [dim]page {page}/{total_pages} · {pending} total[/dim]"
         if total_pages > 1:
             footer += f"  [dim]--page N to navigate (1–{total_pages})[/dim]"
-        console.print(
-            _Panel(
-                pending_rows + footer,
-                title="Pending",
-                border_style="yellow",
-                title_align="left",
-            )
-        )
+        console.print(_panel(pending_rows + footer, title="Pending", style="warn"))

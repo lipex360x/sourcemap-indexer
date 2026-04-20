@@ -4,10 +4,10 @@ import time
 
 import typer
 from rich.console import Console as _Console
-from rich.panel import Panel as _Panel
 
 from sourcemap_indexer.application.sync import run_sync
 from sourcemap_indexer.application.walk import run_walk
+from sourcemap_indexer.cli._rendering import _panel
 from sourcemap_indexer.cli._shared import _open_repo, _resolve_root, app
 from sourcemap_indexer.config import index_yaml_path
 from sourcemap_indexer.lib.either import Left
@@ -41,7 +41,7 @@ def walk(root: str | None = typer.Option(None, help="Project root")) -> None:
         f"  [bold]Root[/bold]   {project_root}\n"
         f"  [bold]Files[/bold]  {walk_result.value}  [dim]scanned in {walk_elapsed:.2f}s[/dim]"
     )
-    console.print(_Panel(walk_body, title="Walk", border_style="bright_blue", title_align="left"))
+    console.print(_panel(walk_body, title="Walk"))
     sync_body = (
         f"  [bold]Inserted[/bold]      {report.inserted}\n"
         f"  [bold]Updated[/bold]       {report.updated}\n"
@@ -49,4 +49,4 @@ def walk(root: str | None = typer.Option(None, help="Project root")) -> None:
         f"  [bold]Unchanged[/bold]     {report.unchanged}  "
         f"[dim]synced in {sync_elapsed:.2f}s[/dim]"
     )
-    console.print(_Panel(sync_body, title="Sync", border_style="bright_blue", title_align="left"))
+    console.print(_panel(sync_body, title="Sync"))

@@ -22,5 +22,5 @@ DEFAULT_IGNORE = [
     ".pytest_cache/",
     "*.db",
     "*.sqlite",
-    ".docs/maps/",
+    ".env",
 ]
