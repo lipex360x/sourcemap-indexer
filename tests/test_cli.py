@@ -596,6 +596,27 @@ def test_brief_shows_no_data_when_not_enriched(tmp_path: Path) -> None:
     assert "no enriched data" in result.output
 
 
+def test_brief_contains_workflows_section(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Workflows" in result.output
+
+
+def test_brief_contains_invariants_section(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Invariants" in result.output
+
+
+def test_brief_stability_in_header(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Stability" in result.output
+
+
 def test_reset_confirmed_deletes_db(tmp_path: Path) -> None:
     _init_sync(tmp_path)
     db_file = tmp_path / ".sourcemap" / "index.db"

@@ -12,6 +12,10 @@ _SQL_TOTALS = (
     "SUM(CASE WHEN needs_llm = 0 THEN 1 ELSE 0 END) AS enriched "
     "FROM items WHERE deleted_at IS NULL"
 )
+_SQL_STABILITY = (
+    "SELECT stability, COUNT(*) AS n FROM items "
+    "WHERE deleted_at IS NULL AND needs_llm = 0 GROUP BY stability ORDER BY n DESC"
+)
 _SQL_ARCHITECTURE = (
     "SELECT layer, language, COUNT(*) AS total FROM items "
     "WHERE deleted_at IS NULL GROUP BY layer, language ORDER BY layer, total DESC"
@@ -19,6 +23,10 @@ _SQL_ARCHITECTURE = (
 _SQL_DOMAIN = (
     "SELECT path, purpose FROM items "
     "WHERE layer = 'domain' AND needs_llm = 0 AND deleted_at IS NULL ORDER BY path LIMIT 10"
+)
+_SQL_WORKFLOWS = (
+    "SELECT path, purpose FROM items "
+    "WHERE layer = 'application' AND needs_llm = 0 AND deleted_at IS NULL ORDER BY path LIMIT 10"
 )
 _SQL_EFFECTS = (
     "SELECT DISTINCT s.effect, COUNT(DISTINCT i.id) AS files FROM items i "
@@ -29,6 +37,11 @@ _SQL_TAGS = (
     "SELECT t.tag, COUNT(*) AS total FROM tags t "
     "JOIN items i ON i.id = t.item_id "
     "WHERE i.deleted_at IS NULL GROUP BY t.tag ORDER BY total DESC LIMIT 15"
+)
+_SQL_INVARIANTS = (
+    "SELECT inv.invariant, COUNT(*) AS n FROM invariants inv "
+    "JOIN items i ON i.id = inv.item_id "
+    "WHERE i.deleted_at IS NULL GROUP BY inv.invariant ORDER BY n DESC LIMIT 15"
 )
 _SQL_UNSTABLE = (
     "SELECT path, stability FROM items "
@@ -44,12 +57,21 @@ def _section(title: str) -> None:
     typer.echo(_SEP)
 
 
+def _stability_line(conn: sqlite3.Connection) -> str:
+    rows = conn.execute(_SQL_STABILITY).fetchall()  # noqa: S608
+    if not rows:
+        return "  Stability: (not enriched yet)"
+    parts = [f"{r['n']} {r['stability']}" for r in rows]
+    return "  Stability: " + " · ".join(parts)
+
+
 def _print_totals(conn: sqlite3.Connection) -> None:
     row = conn.execute(_SQL_TOTALS).fetchone()  # noqa: S608
     total = row["total"] if row else 0
     enriched = row["enriched"] if row else 0
     pending = total - enriched
     typer.echo(f"  Files: {total}   Enriched: {enriched}   Pending: {pending}")
+    typer.echo(_stability_line(conn))
 
 
 def _print_architecture(conn: sqlite3.Connection) -> None:
@@ -61,8 +83,8 @@ def _print_architecture(conn: sqlite3.Connection) -> None:
         typer.echo(f"  {row['layer']:<16}  {row['language']:<6}  {row['total']:>4} files")
 
 
-def _print_domain(conn: sqlite3.Connection) -> None:
-    rows = conn.execute(_SQL_DOMAIN).fetchall()  # noqa: S608
+def _print_layer_files(conn: sqlite3.Connection, sql: str) -> None:
+    rows = conn.execute(sql).fetchall()  # noqa: S608
     if not rows:
         typer.echo("  no enriched data")
         return
@@ -90,6 +112,15 @@ def _print_vocabulary(conn: sqlite3.Connection) -> None:
     typer.echo(f"  {tags}")
 
 
+def _print_invariants(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(_SQL_INVARIANTS).fetchall()  # noqa: S608
+    if not rows:
+        typer.echo("  no enriched data")
+        return
+    for row in rows:
+        typer.echo(f"  · {row['invariant']}")
+
+
 def _print_risk(conn: sqlite3.Connection) -> None:
     rows = conn.execute(_SQL_UNSTABLE).fetchall()  # noqa: S608
     if not rows:
@@ -114,11 +145,15 @@ def brief(root: str | None = typer.Option(None, help="Project root")) -> None:
         _section("Architecture")
         _print_architecture(conn)
         _section("Domain")
-        _print_domain(conn)
+        _print_layer_files(conn, _SQL_DOMAIN)
+        _section("Workflows")
+        _print_layer_files(conn, _SQL_WORKFLOWS)
         _section("I/O Boundaries")
         _print_effects(conn)
         _section("Vocabulary")
         _print_vocabulary(conn)
+        _section("Invariants")
+        _print_invariants(conn)
         _section("Risk Areas")
         _print_risk(conn)
     finally:
