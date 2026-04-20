@@ -168,6 +168,42 @@ After enrichment, `needs_llm` is cleared and `llm_hash` is set to the content ha
 > [!IMPORTANT]
 > `sourcemap enrich` calls an LLM. Without a reachable endpoint (`SOURCEMAP_LLM_URL`), walk and stats work fine — only enrichment is blocked.
 
+### Installing uv
+
+**macOS**
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Or via Homebrew:
+
+```bash
+brew install uv
+```
+
+**Linux**
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Add `~/.local/bin` to your `PATH` if not already present (the installer will prompt you).
+
+**Windows**
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Or via WinGet:
+
+```powershell
+winget install --id=astral-sh.uv -e
+```
+
+After installation, restart your terminal and verify with `uv --version`.
+
 [↑ back to top](#top)
 
 ---
