@@ -221,7 +221,7 @@ def enrich(
     for error in report.errors:
         typer.echo(f"  ! {error}", err=True)
     typer.echo("")
-    stats(root=root, page=1)
+    stats(root=root, show=False, page=1)
 
 
 @app.command(help=_FIND_HELP)
@@ -282,14 +282,16 @@ def _bar(value: int, maximum: int, width: int = 18) -> str:
 
 _STATS_HELP = (
     "Show total, enriched, and pending counts broken down by layer and language."
-    " Pending files listed at the bottom (--page N). Page size: SOURCEMAP_PAGE_SIZE (default 20)."
+    " Add --show to list pending files (combine with --page N)."
+    " Page size: SOURCEMAP_PAGE_SIZE (default 20)."
 )
 
 
 @app.command(help=_STATS_HELP)
 def stats(
     root: str | None = typer.Option(None, help="Project root"),
-    page: int = typer.Option(1, "--page", help="Page of pending files to show"),
+    show: bool = typer.Option(False, "--show", help="List pending files"),
+    page: int = typer.Option(1, "--page", help="Page of pending files (requires --show)"),
 ) -> None:
     project_root = _resolve_root(root)
     load_dotenv(project_root / ".env")
@@ -373,7 +375,7 @@ def stats(
     for lang, cnt in sorted(by_lang.items(), key=lambda x: -x[1]):
         typer.echo(f"  {lang:<{col}}  {cnt:>5}  {_bar(cnt, top)}")
 
-    if pending_items:
+    if show and pending_items:
         total_pages = math.ceil(pending / page_size)
         page = max(1, min(page, total_pages))
         start = (page - 1) * page_size

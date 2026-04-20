@@ -131,7 +131,7 @@ def test_stats_auto_walks_new_files(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     (tmp_path / "app.py").write_text("x = 1\n")
-    result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path), "--show"])
     assert result.exit_code == 0
     assert "app.py" in result.output
 
