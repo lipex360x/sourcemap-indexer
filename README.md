@@ -73,8 +73,8 @@ your-project/
 
 Scans the project tree and updates the database in three internal steps:
 
-1. **Scan** — traverses all files (respecting `.gitignore` and `.sourcemapignore`), collects path, language, line count, size, content hash, and last-modified timestamp
-2. **Write** — serializes the result to `index.yaml` inside the maps directory (human-readable snapshot of every tracked file)
+1. **Scan** — traverses all files (respecting `.gitignore` and `.sourcemapignore`), collects path, language, line count, size, content hash, and last-modified timestamp. On the second and subsequent runs, files whose `mtime` and `size` match the SQLite record are skipped entirely — only changed files are read and re-hashed. This makes `walk` scale to large codebases: a 10 000-file tree with 5 changed files reads 5 files instead of 10 000.
+2. **Write** — serializes the result to `index.yaml` inside the maps directory (human-readable snapshot of every tracked file; planned for removal in a future release once SQLite becomes the sole source of truth)
 3. **Sync** — reads `index.yaml` and reconciles the SQLite database:
    - New file → inserted with `needs_llm = true`
    - File changed (hash diff) → updated with `needs_llm = true`

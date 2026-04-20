@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from sourcemap_indexer.domain.value_objects import Language
 from sourcemap_indexer.infra.walker import (
     WalkedFile,
@@ -193,3 +195,132 @@ def test_walked_file_has_content_hash(tmp_path: Path) -> None:
     walked = result.value[0]
     assert isinstance(walked, WalkedFile)
     assert len(walked.content_hash.hex_value) == 64
+
+
+def test_walk_project_skips_read_when_mtime_and_size_match(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    content = b"x = 1\n"
+    file_path = tmp_path / "app.py"
+    file_path.write_bytes(content)
+    file_stat = file_path.stat()
+    mtime = int(file_stat.st_mtime)
+    size_bytes = file_stat.st_size
+    stored_hash = "ab" * 32
+    stored_lines = 42
+
+    read_count = 0
+    original_read_bytes = Path.read_bytes
+
+    def counting_read(self: Path) -> bytes:
+        nonlocal read_count
+        read_count += 1
+        return original_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", counting_read)
+
+    known_files = {"app.py": (mtime, size_bytes, stored_lines, stored_hash)}
+    result = walk_project(tmp_path, known_files=known_files)
+
+    assert isinstance(result, Right)
+    assert read_count == 0
+    walked = result.value[0]
+    assert walked.content_hash.hex_value == stored_hash
+    assert walked.lines == stored_lines
+
+
+def test_walk_project_rehashes_when_mtime_differs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    content = b"x = 1\n"
+    file_path = tmp_path / "app.py"
+    file_path.write_bytes(content)
+    file_stat = file_path.stat()
+    size_bytes = file_stat.st_size
+    stale_mtime = int(file_stat.st_mtime) - 1
+
+    read_count = 0
+    original_read_bytes = Path.read_bytes
+
+    def counting_read(self: Path) -> bytes:
+        nonlocal read_count
+        read_count += 1
+        return original_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", counting_read)
+
+    known_files = {"app.py": (stale_mtime, size_bytes, 1, "cd" * 32)}
+    result = walk_project(tmp_path, known_files=known_files)
+
+    assert isinstance(result, Right)
+    assert read_count == 1
+
+
+def test_walk_project_rehashes_when_size_differs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    content = b"x = 1\n"
+    file_path = tmp_path / "app.py"
+    file_path.write_bytes(content)
+    file_stat = file_path.stat()
+    mtime = int(file_stat.st_mtime)
+    wrong_size = file_stat.st_size + 1
+
+    read_count = 0
+    original_read_bytes = Path.read_bytes
+
+    def counting_read(self: Path) -> bytes:
+        nonlocal read_count
+        read_count += 1
+        return original_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", counting_read)
+
+    known_files = {"app.py": (mtime, wrong_size, 1, "cd" * 32)}
+    result = walk_project(tmp_path, known_files=known_files)
+
+    assert isinstance(result, Right)
+    assert read_count == 1
+
+
+def test_walk_project_rehashes_new_file_not_in_known(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_bytes(b"x = 1\n")
+
+    read_count = 0
+    original_read_bytes = Path.read_bytes
+
+    def counting_read(self: Path) -> bytes:
+        nonlocal read_count
+        read_count += 1
+        return original_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", counting_read)
+
+    result = walk_project(tmp_path, known_files={})
+
+    assert isinstance(result, Right)
+    assert read_count == 1
+
+
+def test_walk_project_known_files_none_hashes_all(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_bytes(b"x = 1\n")
+    (tmp_path / "other.py").write_bytes(b"y = 2\n")
+
+    read_count = 0
+    original_read_bytes = Path.read_bytes
+
+    def counting_read(self: Path) -> bytes:
+        nonlocal read_count
+        read_count += 1
+        return original_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", counting_read)
+
+    result = walk_project(tmp_path, known_files=None)
+
+    assert isinstance(result, Right)
+    assert read_count == 2

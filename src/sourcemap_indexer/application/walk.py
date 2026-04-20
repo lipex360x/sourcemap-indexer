@@ -9,8 +9,12 @@ from sourcemap_indexer.infra.walker import walk_project
 from sourcemap_indexer.lib.either import Either, Left, left, right
 
 
-def run_walk(root: Path, output_path: Path) -> Either[str, int]:
-    walked_result = walk_project(root)
+def run_walk(
+    root: Path,
+    output_path: Path,
+    known_files: dict[str, tuple[int, int, int, str]] | None = None,
+) -> Either[str, int]:
+    walked_result = walk_project(root, known_files=known_files)
     if isinstance(walked_result, Left):
         return walked_result
     walked = walked_result.value
