@@ -84,4 +84,5 @@ def create_llm_log(
     resolved_env = environ if environ is not None else dict(os.environ)
     if resolved_env.get("SOURCEMAP_LLM_LOG") != "1":
         return _NoopLlmLog()
-    return _FileLlmLog(log_dir / "llm.yaml")
+    timestamp = datetime.now(tz=UTC).strftime("%Y%m%d-%H%M%S%f")
+    return _FileLlmLog(log_dir / f"llm-{timestamp}.yaml")
