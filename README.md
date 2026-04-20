@@ -36,6 +36,9 @@ sourcemap init     →   sourcemap walk     →   sourcemap enrich
   (one-time)            (after changes)         (calls LLM)
 ```
 
+> [!NOTE]
+> `init` and `walk` are fully offline — no LLM required. Only `enrich` calls an external model.
+
 ### Phase 1 — `sourcemap init`
 
 Creates the directory structure needed by the other commands:
