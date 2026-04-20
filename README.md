@@ -53,14 +53,17 @@ your-project/
 ```
 
 > [!NOTE]
+> The output directory defaults to `.docs/maps/` and can be changed via `SOURCEMAP_MAPS_DIR`. See [Environment variables](#env).
+
+> [!NOTE]
 > `init` is idempotent — safe to run multiple times. It never overwrites an existing `.sourcemapignore` or database.
 
 ### Phase 2 — `sourcemap walk`
 
-Scans the project tree and updates the database in two internal steps:
+Scans the project tree and updates the database in three internal steps:
 
 1. **Scan** — traverses all files (respecting `.gitignore` and `.sourcemapignore`), collects path, language, line count, size, content hash, and last-modified timestamp
-2. **Write** — serializes the result to `.docs/maps/index.yaml` (human-readable snapshot of every tracked file)
+2. **Write** — serializes the result to `index.yaml` inside the maps directory (human-readable snapshot of every tracked file)
 3. **Sync** — reads `index.yaml` and reconciles the SQLite database:
    - New file → inserted with `needs_llm = true`
    - File changed (hash diff) → updated with `needs_llm = true`
@@ -111,6 +114,8 @@ After enrichment, `needs_llm` is cleared and `llm_hash` is set to the content ha
 > [!IMPORTANT]
 > Enrichment calls the LLM for every pending file. For large codebases, use `--limit N` to process in batches and avoid timeouts or rate limits.
 
+[↑ back to top](#topo)
+
 ---
 
 <a id="prerequisites"></a>
@@ -128,6 +133,8 @@ After enrichment, `needs_llm` is cleared and `llm_hash` is set to the content ha
 
 > [!IMPORTANT]
 > `sourcemap enrich` calls an LLM. Without a reachable endpoint (`SOURCEMAP_LLM_URL`), walk and stats work fine — only enrichment is blocked.
+
+[↑ back to top](#topo)
 
 ---
 
@@ -153,6 +160,8 @@ uv tool uninstall sourcemap-indexer
 
 The binary lives at `~/.local/bin/sourcemap`. The tool environment is at `~/.local/share/uv/tools/sourcemap-indexer/`.
 
+[↑ back to top](#topo)
+
 ---
 
 <a id="quickstart"></a>
@@ -167,6 +176,8 @@ sourcemap enrich  # call LLM to annotate each file
 sourcemap stats   # overview: total, enriched, pending
 ```
 
+[↑ back to top](#topo)
+
 ---
 
 <a id="commands"></a>
@@ -177,7 +188,7 @@ sourcemap stats   # overview: total, enriched, pending
 
 | Command | Description |
 |---------|-------------|
-| `sourcemap init` | Create `.docs/maps/`, `.sourcemapignore`, and `index.db` |
+| `sourcemap init` | Create the maps directory, `.sourcemapignore`, and `index.db` |
 | `sourcemap walk` | Scan files and sync metadata into SQLite |
 
 ### Enrichment
@@ -214,6 +225,8 @@ sourcemap stats   # overview: total, enriched, pending
 | `sourcemap restore` | Restore `index.db` from a previously saved `.bak` file |
 | `sourcemap install-skill --target <dir>` | Copy the skill file to your AI assistant's skills directory |
 
+[↑ back to top](#topo)
+
 ---
 
 <a id="env"></a>
@@ -226,7 +239,7 @@ sourcemap stats   # overview: total, enriched, pending
 | `SOURCEMAP_LLM_MODEL` | `qwen/qwen3-coder-30b` | Model name passed to the endpoint |
 | `SOURCEMAP_LLM_API_KEY` | _(empty)_ | Bearer token for authenticated providers |
 | `SOURCEMAP_PAGE_SIZE` | `20` | Number of pending files shown per page in `stats` |
-| `SOURCEMAP_MAPS_DIR` | `.docs/maps` | Output directory for `index.db` and `index.yaml` (relative to project root or absolute) |
+| `SOURCEMAP_MAPS_DIR` | `.docs/maps` | Output directory for `index.db` and `index.yaml` — relative to project root or absolute |
 
 `sourcemap enrich` automatically reads a `.env` file from the project root before resolving env vars:
 
@@ -239,6 +252,8 @@ SOURCEMAP_LLM_API_KEY=your-api-key
 
 > [!NOTE]
 > Variables already present in the shell environment take precedence over `.env` values.
+
+[↑ back to top](#topo)
 
 ---
 
@@ -257,6 +272,8 @@ dist/           build/        .next/        .turbo/
 coverage/       .docs/maps/   *.pyc         *.min.js
 *.lock          *.db          *.sqlite      *.map
 ```
+
+> If you change `SOURCEMAP_MAPS_DIR`, add your custom directory here too so it is not indexed.
 
 </details>
 
@@ -288,6 +305,8 @@ Pattern rules:
 | `src/generated/` | Subdirectory under a specific path |
 | `#` at line start | Comment — line is ignored |
 
+[↑ back to top](#topo)
+
 ---
 
 <a id="llm"></a>
@@ -302,6 +321,11 @@ export SOURCEMAP_LLM_URL=https://api.openai.com/v1/chat/completions
 export SOURCEMAP_LLM_MODEL=gpt-4o
 export SOURCEMAP_LLM_API_KEY=sk-...
 
+# OpenRouter (free tier available)
+export SOURCEMAP_LLM_URL=https://openrouter.ai/api/v1/chat/completions
+export SOURCEMAP_LLM_MODEL=deepseek/deepseek-r1:free
+export SOURCEMAP_LLM_API_KEY=sk-or-...
+
 # Local (LM Studio)
 export SOURCEMAP_LLM_URL=http://localhost:1234/v1/chat/completions
 export SOURCEMAP_LLM_MODEL=your-loaded-model-name
@@ -309,6 +333,8 @@ export SOURCEMAP_LLM_MODEL=your-loaded-model-name
 
 sourcemap enrich --limit 10
 ```
+
+[↑ back to top](#topo)
 
 ---
 
@@ -326,6 +352,8 @@ sourcemap install-skill --target ~/.claude/skills
 sourcemap install-skill --target <your-tool-skills-dir>
 ```
 
+[↑ back to top](#topo)
+
 ---
 
 <a id="hook"></a>
@@ -340,6 +368,8 @@ Installs a `post-commit` hook that runs `sourcemap walk` after every commit, kee
 
 > [!NOTE]
 > Enrichment is not automatic — it calls the LLM and can be slow. Run `sourcemap enrich` manually when you want updated metadata.
+
+[↑ back to top](#topo)
 
 ---
 
@@ -358,6 +388,8 @@ invariants   (item_id, invariant)
 
 Layers: `domain | infra | application | cli | hook | lib | config | doc | test | unknown`
 
+[↑ back to top](#topo)
+
 ---
 
 <a id="dev"></a>
@@ -370,3 +402,5 @@ cd sourcemap-indexer
 uv sync
 uv run pytest
 ```
+
+[↑ back to top](#topo)
