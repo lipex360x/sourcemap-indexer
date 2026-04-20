@@ -300,6 +300,16 @@ All commands are invoked as `sourcemap <command>`.
 | `SOURCEMAP_PAGE_SIZE` | `20` | Number of pending files shown per page in `stats` |
 | `SOURCEMAP_MAPS_DIR` | `.docs/maps` | Output directory for `index.db` and `index.yaml` — relative to project root or absolute |
 
+### Custom LLM prompt
+
+The system prompt sent to the LLM is file-based, not an env var. To customise it:
+
+```bash
+sourcemap enrich --export-prompt   # writes prompt.txt to the maps directory and exits
+```
+
+Edit `prompt.txt`, then run `enrich` normally — if the file exists it is used instead of the built-in default. Delete the file to revert to the default.
+
 `sourcemap enrich` automatically reads a `.env` file from the project root before resolving env vars:
 
 ```ini
