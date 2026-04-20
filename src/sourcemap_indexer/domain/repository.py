@@ -20,6 +20,7 @@ class ItemRepository(Protocol):
         force: bool = False,
         layer: Layer | None = None,
         language: Language | None = None,
+        path: str | None = None,
     ) -> Either[str, list[Item]]: ...
 
     def find_all_paths(self) -> Either[str, set[str]]: ...

@@ -170,6 +170,7 @@ class SqliteItemRepository:
         force: bool = False,
         layer: Layer | None = None,
         language: Language | None = None,
+        path: str | None = None,
     ) -> Either[str, list[Item]]:
         try:
             conditions = ["deleted_at IS NULL"]
@@ -182,6 +183,9 @@ class SqliteItemRepository:
             if language is not None:
                 conditions.append("language = ?")
                 params.append(str(language))
+            if path is not None:
+                conditions.append("path = ?")
+                params.append(path)
             query = "SELECT * FROM items WHERE " + " AND ".join(conditions)
             if limit is not None:
                 query += " LIMIT ?"

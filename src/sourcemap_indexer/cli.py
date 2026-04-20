@@ -35,6 +35,7 @@ _LAYER_VALUES = "domain|infra|application|cli|hook|lib|config|doc|test|unknown"
 _LANG_VALUES = "py|sh|ts|tsx|js|sql|md|yaml|json|toml|other"
 _LAYER_HELP = f"Filter by layer: {_LAYER_VALUES}"
 _LANG_HELP = f"Filter by language: {_LANG_VALUES}"
+_FILE_HELP = "Single file path to enrich (sets --force)"
 _FIND_HELP = f"Search files by --tag TEXT, --layer ({_LAYER_VALUES}), --language ({_LANG_VALUES})."
 
 
@@ -112,7 +113,12 @@ def sync(root: str | None = typer.Option(None, help="Project root")) -> None:
 
 _ENRICH_HELP = (
     "Enrich pending files via LLM. --limit N, --force (re-enrich),"
-    f" --layer ({_LAYER_VALUES}), --language ({_LANG_VALUES}), -m INSTRUCTION."
+    f" --layer ({_LAYER_VALUES}), --language ({_LANG_VALUES}),"
+    " --file PATH (single file), -m INSTRUCTION.\n\n"
+    "  Examples:\n"
+    "    sourcemap enrich --limit 10\n"
+    "    sourcemap enrich --force --file src/app.py\n"
+    "    sourcemap enrich --force --layer unknown -m 'write in English'"
 )
 
 
@@ -124,6 +130,7 @@ def enrich(
     layer: str | None = typer.Option(None, "--layer", help=_LAYER_HELP),
     language: str | None = typer.Option(None, "--language", help=_LANG_HELP),
     message: str | None = typer.Option(None, "-m", help="Extra instruction injected into prompt"),
+    file: str | None = typer.Option(None, "--file", help=_FILE_HELP),
 ) -> None:
     project_root = _resolve_root(root)
     load_dotenv(project_root / ".env")
@@ -141,6 +148,8 @@ def enrich(
 
     layer_val = Layer(layer) if layer else None
     language_val = Language(language) if language else None
+    if file:
+        force = True
 
     def _progress(path: str, success: bool, current: int, total: int) -> None:
         bar_width = 20
@@ -162,6 +171,7 @@ def enrich(
         layer_filter=layer_val,
         language_filter=language_val,
         extra_instruction=message,
+        path_filter=file,
     )
     elapsed = time.perf_counter() - started
     if isinstance(enrich_result, Left):

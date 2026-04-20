@@ -40,12 +40,14 @@ def run_enrich(
     layer_filter: Layer | None = None,
     language_filter: Language | None = None,
     extra_instruction: str | None = None,
+    path_filter: str | None = None,
 ) -> Either[str, EnrichReport]:
     items_result = repository.find_needs_llm(
         limit=batch_limit,
         force=force,
         layer=layer_filter,
         language=language_filter,
+        path=path_filter,
     )
     if isinstance(items_result, Left):
         return items_result
