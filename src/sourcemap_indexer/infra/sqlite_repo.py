@@ -164,10 +164,25 @@ class SqliteItemRepository:
         except sqlite3.Error as error:
             return left(f"db-error: {error}")
 
-    def find_needs_llm(self, limit: int | None = None) -> Either[str, list[Item]]:
+    def find_needs_llm(
+        self,
+        limit: int | None = None,
+        force: bool = False,
+        layer: Layer | None = None,
+        language: Language | None = None,
+    ) -> Either[str, list[Item]]:
         try:
-            query = "SELECT * FROM items WHERE needs_llm = 1 AND deleted_at IS NULL"
-            params: list[int] = []
+            conditions = ["deleted_at IS NULL"]
+            params: list[Any] = []
+            if not force:
+                conditions.append("needs_llm = 1")
+            if layer is not None:
+                conditions.append("layer = ?")
+                params.append(str(layer))
+            if language is not None:
+                conditions.append("language = ?")
+                params.append(str(language))
+            query = "SELECT * FROM items WHERE " + " AND ".join(conditions)
             if limit is not None:
                 query += " LIMIT ?"
                 params.append(limit)

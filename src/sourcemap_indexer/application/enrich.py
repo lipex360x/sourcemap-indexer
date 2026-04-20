@@ -7,14 +7,18 @@ from pathlib import Path
 from typing import Protocol
 
 from sourcemap_indexer.domain.repository import ItemRepository
-from sourcemap_indexer.domain.value_objects import Language
+from sourcemap_indexer.domain.value_objects import Language, Layer
 from sourcemap_indexer.infra.llama_client import EnrichmentResult
 from sourcemap_indexer.lib.either import Either, Left, right
 
 
 class _EnrichClient(Protocol):
     def enrich(
-        self, path: str, language: Language, content: str
+        self,
+        path: str,
+        language: Language,
+        content: str,
+        extra_instruction: str | None = None,
     ) -> Either[str, EnrichmentResult]: ...
 
 
@@ -32,8 +36,17 @@ def run_enrich(
     client: _EnrichClient,
     batch_limit: int | None = None,
     on_progress: Callable[[str, bool, int, int], None] | None = None,
+    force: bool = False,
+    layer_filter: Layer | None = None,
+    language_filter: Language | None = None,
+    extra_instruction: str | None = None,
 ) -> Either[str, EnrichReport]:
-    items_result = repository.find_needs_llm(limit=batch_limit)
+    items_result = repository.find_needs_llm(
+        limit=batch_limit,
+        force=force,
+        layer=layer_filter,
+        language=language_filter,
+    )
     if isinstance(items_result, Left):
         return items_result
 
@@ -57,7 +70,7 @@ def run_enrich(
                 on_progress(item.path, False, done, total_items)
             continue
 
-        enrich_result = client.enrich(item.path, item.language, content)
+        enrich_result = client.enrich(item.path, item.language, content, extra_instruction)
         if isinstance(enrich_result, Left):
             failed += 1
             done += 1

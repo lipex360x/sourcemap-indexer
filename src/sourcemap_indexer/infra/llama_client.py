@@ -120,14 +120,23 @@ class LlamaClient:
             return left(f"llm-unreachable: {error}")
         return right(None)
 
-    def enrich(self, path: str, language: Language, content: str) -> Either[str, EnrichmentResult]:
+    def enrich(
+        self,
+        path: str,
+        language: Language,
+        content: str,
+        extra_instruction: str | None = None,
+    ) -> Either[str, EnrichmentResult]:
         if len(content) > self._config.max_chars:
             content = content[: self._config.max_chars]
+        system = _SYSTEM_PROMPT
+        if extra_instruction:
+            system = system + f"\n\nAdditional instruction: {extra_instruction}"
         user_prompt = f"Path: {path}\nLanguage: {language}\n\n---\n{content}"
         body = {
             "model": self._config.model,
             "messages": [
-                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "system", "content": system},
                 {"role": "user", "content": user_prompt},
             ],
             "temperature": self._config.temperature,

@@ -54,7 +54,13 @@ class _StubClient:
     def __init__(self, response: Either[str, EnrichmentResult]) -> None:
         self._response = response
 
-    def enrich(self, path: str, language: Language, content: str) -> Either[str, EnrichmentResult]:
+    def enrich(
+        self,
+        path: str,
+        language: Language,
+        content: str,
+        extra_instruction: str | None = None,
+    ) -> Either[str, EnrichmentResult]:
         return self._response
 
 
@@ -148,7 +154,11 @@ def test_enrich_partial_failure(tmp_path: Path) -> None:
 
     class _MixedClient:
         def enrich(
-            self, path: str, language: Language, content: str
+            self,
+            path: str,
+            language: Language,
+            content: str,
+            extra_instruction: str | None = None,
         ) -> Either[str, EnrichmentResult]:
             nonlocal call_count
             call_count += 1

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+import os
 import shutil
 import sqlite3
 import time
@@ -108,13 +110,20 @@ def sync(root: str | None = typer.Option(None, help="Project root")) -> None:
     )
 
 
-_ENRICH_HELP = "Enrich pending files via LLM. Use --limit N to cap. Stores purpose, tags, layer."
+_ENRICH_HELP = (
+    "Enrich pending files via LLM. --limit N, --force (re-enrich),"
+    f" --layer ({_LAYER_VALUES}), --language ({_LANG_VALUES}), -m INSTRUCTION."
+)
 
 
 @app.command(help=_ENRICH_HELP)
 def enrich(
     root: str | None = typer.Option(None, help="Project root"),
     limit: int | None = typer.Option(None, "--limit", help="Max items to enrich"),
+    force: bool = typer.Option(False, "--force", help="Re-enrich already enriched files"),
+    layer: str | None = typer.Option(None, "--layer", help=_LAYER_HELP),
+    language: str | None = typer.Option(None, "--language", help=_LANG_HELP),
+    message: str | None = typer.Option(None, "-m", help="Extra instruction injected into prompt"),
 ) -> None:
     project_root = _resolve_root(root)
     load_dotenv(project_root / ".env")
@@ -122,11 +131,16 @@ def enrich(
     config = from_environ()
     client = LlamaClient(config)
     typer.echo(f"Model: {config.model}  ({config.url})")
+    if message:
+        typer.echo(f"Instruction: {message}")
     ping_result = client.ping()
     if isinstance(ping_result, Left):
         typer.echo(f"Error: LLM unreachable — {ping_result.error}", err=True)
         typer.echo(f"  Check that your LLM server is running at: {config.url}", err=True)
         raise typer.Exit(1)
+
+    layer_val = Layer(layer) if layer else None
+    language_val = Language(language) if language else None
 
     def _progress(path: str, success: bool, current: int, total: int) -> None:
         bar_width = 20
@@ -138,7 +152,17 @@ def enrich(
         typer.echo(f"  [{current:>{pad}}/{total}] [{bar}] {pct:>3}%  {symbol} {path}")
 
     started = time.perf_counter()
-    enrich_result = run_enrich(project_root, repo, client, batch_limit=limit, on_progress=_progress)
+    enrich_result = run_enrich(
+        project_root,
+        repo,
+        client,
+        batch_limit=limit,
+        on_progress=_progress,
+        force=force,
+        layer_filter=layer_val,
+        language_filter=language_val,
+        extra_instruction=message,
+    )
     elapsed = time.perf_counter() - started
     if isinstance(enrich_result, Left):
         typer.echo(f"Error: {enrich_result.error}", err=True)
@@ -151,7 +175,7 @@ def enrich(
     for error in report.errors:
         typer.echo(f"  ! {error}", err=True)
     typer.echo("")
-    stats(root=root)
+    stats(root=root, page=1)
 
 
 @app.command(help=_FIND_HELP)
@@ -210,9 +234,22 @@ def _bar(value: int, maximum: int, width: int = 18) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
-@app.command(help="Show total, enriched, and pending counts broken down by layer and language.")
-def stats(root: str | None = typer.Option(None, help="Project root")) -> None:
+_STATS_HELP = (
+    "Show total, enriched, and pending counts broken down by layer and language."
+    " Pending files listed at the bottom (--page N). Page size: SOURCEMAP_PAGE_SIZE (default 20)."
+)
+
+
+@app.command(help=_STATS_HELP)
+def stats(
+    root: str | None = typer.Option(None, help="Project root"),
+    page: int = typer.Option(1, "--page", help="Page of pending files to show"),
+) -> None:
     project_root = _resolve_root(root)
+    load_dotenv(project_root / ".env")
+    llm = from_environ()
+    page_size = int(os.environ.get("SOURCEMAP_PAGE_SIZE", "20"))
+
     repo = _open_repo(project_root)
     all_result = repo.search(tags=None, layer=None, language=None)
     if isinstance(all_result, Left):
@@ -221,15 +258,13 @@ def stats(root: str | None = typer.Option(None, help="Project root")) -> None:
     items = all_result.value
     total = len(items)
     enriched = sum(1 for i in items if not i.needs_llm)
-    pending = total - enriched
+    pending_items = [i for i in items if i.needs_llm]
+    pending = len(pending_items)
     by_layer: dict[str, int] = {}
     by_lang: dict[str, int] = {}
     for item in items:
         by_layer[str(item.layer)] = by_layer.get(str(item.layer), 0) + 1
         by_lang[str(item.language)] = by_lang.get(str(item.language), 0) + 1
-
-    load_dotenv(project_root / ".env")
-    llm = from_environ()
 
     sep = "━" * 52
     pct = round(enriched / total * 100) if total else 0
@@ -254,6 +289,19 @@ def stats(root: str | None = typer.Option(None, help="Project root")) -> None:
     typer.echo("  By language")
     for lang, cnt in sorted(by_lang.items(), key=lambda x: -x[1]):
         typer.echo(f"  {lang:<{col}}  {cnt:>5}  {_bar(cnt, top)}")
+
+    if pending_items:
+        total_pages = math.ceil(pending / page_size)
+        page = max(1, min(page, total_pages))
+        start = (page - 1) * page_size
+        page_slice = pending_items[start : start + page_size]
+        typer.echo("")
+        typer.echo(f"  Pending  (page {page}/{total_pages} · {pending} total)")
+        for item in page_slice:
+            typer.echo(f"  {item.language:<6}  {item.path}")
+        if total_pages > 1:
+            typer.echo(f"  Use --page N to navigate (1–{total_pages})")
+
     typer.echo(sep)
 
 

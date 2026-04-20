@@ -14,7 +14,13 @@ class ItemRepository(Protocol):
 
     def find_by_id(self, item_id: ItemId) -> Either[str, Item | None]: ...
 
-    def find_needs_llm(self, limit: int | None = None) -> Either[str, list[Item]]: ...
+    def find_needs_llm(
+        self,
+        limit: int | None = None,
+        force: bool = False,
+        layer: Layer | None = None,
+        language: Language | None = None,
+    ) -> Either[str, list[Item]]: ...
 
     def find_all_paths(self) -> Either[str, set[str]]: ...
 
