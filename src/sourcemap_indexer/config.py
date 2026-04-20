@@ -51,5 +51,13 @@ def import_prompt_path() -> Either[str, Path | None]:
     return right(path)
 
 
+def config_dir(root: Path) -> Path:
+    custom = os.environ.get("SOURCEMAP_CONFIG_DIR", "")
+    if custom:
+        custom_path = Path(custom)
+        return custom_path if custom_path.is_absolute() else root / custom_path
+    return root / ".sourcemap"
+
+
 def default_prompt_export_path(root: Path) -> Path:
     return maps_dir(root) / "prompt.md"

@@ -156,9 +156,9 @@ def _enrich(item: Item, layer: Layer) -> Item:
 
 def test_find_needs_llm_filters_by_layer() -> None:
     repo = _make_repo()
-    repo.upsert(_enrich(_make_item(path="domain.py"), Layer.DOMAIN))
-    repo.upsert(_enrich(_make_item(path="infra.py"), Layer.INFRA))
-    result = repo.find_needs_llm(force=True, layer=Layer.DOMAIN)
+    repo.upsert(_enrich(_make_item(path="domain.py"), "domain"))
+    repo.upsert(_enrich(_make_item(path="infra.py"), "infra"))
+    result = repo.find_needs_llm(force=True, layer="domain")
     assert isinstance(result, Right)
     paths = [i.path for i in result.value]
     assert "domain.py" in paths
@@ -320,13 +320,13 @@ def test_search_filter_by_layer() -> None:
         size_bytes=10,
         content_hash=ContentHash("1" * 64),
         last_modified=0,
-        layer=Layer.DOMAIN,
+        layer="domain",
         created_at=0,
         updated_at=0,
     )
     repo.upsert(domain_item)
     repo.upsert(_make_item(path="other.py"))
-    result = repo.search(tags=None, layer=Layer.DOMAIN, language=None)
+    result = repo.search(tags=None, layer="domain", language=None)
     assert isinstance(result, Right)
     paths = [i.path for i in result.value]
     assert "domain/entity.py" in paths
@@ -429,7 +429,7 @@ def test_llm_hash_round_trip() -> None:
         needs_llm=False,
         llm_hash=ContentHash("b" * 64),
         llm_at=12345,
-        layer=Layer.DOMAIN,
+        layer="domain",
         stability=Stability.STABLE,
         created_at=0,
         updated_at=0,
@@ -442,7 +442,7 @@ def test_llm_hash_round_trip() -> None:
     assert found.llm_hash is not None
     assert found.llm_hash.hex_value == "b" * 64
     assert found.llm_at == 12345
-    assert found.layer == Layer.DOMAIN
+    assert found.layer == "domain"
     assert found.stability == Stability.STABLE
 
 

@@ -9,7 +9,6 @@ from sourcemap_indexer.domain.value_objects import (
     ContentHash,
     ItemId,
     Language,
-    Layer,
     Stability,
 )
 from sourcemap_indexer.infra.llm_client import EnrichmentResult
@@ -43,7 +42,7 @@ def _make_item(path: str, root: Path) -> Item:
 _VALID_RESULT = EnrichmentResult(
     purpose="Application entry point",
     tags=frozenset({"cli", "entry-point"}),
-    layer=Layer.APPLICATION,
+    layer="application",
     stability=Stability.STABLE,
     side_effects=frozenset(),
     invariants=(),
@@ -286,3 +285,71 @@ def test_empty_file_saved_with_stub_purpose(tmp_path: Path) -> None:
     assert found.value is not None
     assert found.value.purpose == "Empty file"
     assert "empty-file" in found.value.tags
+
+
+def test_invalid_layer_marks_failed_and_preserves_needs_llm(tmp_path: Path) -> None:
+    repo = _make_repo()
+    item = _make_item("app.py", tmp_path)
+    (tmp_path / "app.py").write_text("x = 1\n")
+    repo.upsert(item)
+    invalid_result = EnrichmentResult(
+        purpose="p",
+        tags=frozenset({"t"}),
+        layer="nonexistent_layer",
+        stability=Stability.STABLE,
+        side_effects=frozenset(),
+        invariants=(),
+    )
+    client = _stub(right(invalid_result))
+    valid_layers = frozenset({"domain", "infra", "unknown"})
+    result = run_enrich(tmp_path, repo, client, valid_layers=valid_layers)  # type: ignore[arg-type]
+    assert isinstance(result, Right)
+    assert result.value.failed == 1
+    assert result.value.enriched == 0
+    found = repo.find_by_path("app.py")
+    assert isinstance(found, Right)
+    assert found.value is not None
+    assert found.value.needs_llm is True
+
+
+def test_valid_user_layer_is_accepted(tmp_path: Path) -> None:
+    repo = _make_repo()
+    item = _make_item("app.py", tmp_path)
+    (tmp_path / "app.py").write_text("x = 1\n")
+    repo.upsert(item)
+    custom_result = EnrichmentResult(
+        purpose="p",
+        tags=frozenset({"t"}),
+        layer="controller",
+        stability=Stability.STABLE,
+        side_effects=frozenset(),
+        invariants=(),
+    )
+    client = _stub(right(custom_result))
+    valid_layers = frozenset({"domain", "controller", "unknown"})
+    result = run_enrich(tmp_path, repo, client, valid_layers=valid_layers)  # type: ignore[arg-type]
+    assert isinstance(result, Right)
+    assert result.value.enriched == 1
+    found = repo.find_by_path("app.py")
+    assert isinstance(found, Right)
+    assert found.value is not None
+    assert found.value.layer == "controller"
+
+
+def test_no_valid_layers_accepts_any_layer(tmp_path: Path) -> None:
+    repo = _make_repo()
+    item = _make_item("app.py", tmp_path)
+    (tmp_path / "app.py").write_text("x = 1\n")
+    repo.upsert(item)
+    custom_result = EnrichmentResult(
+        purpose="p",
+        tags=frozenset({"t"}),
+        layer="anything",
+        stability=Stability.STABLE,
+        side_effects=frozenset(),
+        invariants=(),
+    )
+    client = _stub(right(custom_result))
+    result = run_enrich(tmp_path, repo, client)  # type: ignore[arg-type]
+    assert isinstance(result, Right)
+    assert result.value.enriched == 1

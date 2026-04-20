@@ -24,13 +24,15 @@ from sourcemap_indexer.cli._shared import (
     app,
 )
 from sourcemap_indexer.config import (
+    config_dir,
     default_prompt_export_path,
     import_prompt_path,
     index_yaml_path,
     logs_dir,
 )
-from sourcemap_indexer.domain.value_objects import Language, Layer
+from sourcemap_indexer.domain.value_objects import _DEFAULT_LAYERS, Language, Layer
 from sourcemap_indexer.infra.dotenv import load_dotenv
+from sourcemap_indexer.infra.layers_config import load_user_layers
 from sourcemap_indexer.infra.llm_client import (
     SYSTEM_PROMPT,
     LlmClient,
@@ -70,6 +72,13 @@ def enrich(
     project_root = _resolve_root(root)
     load_dotenv(project_root / ".env")
 
+    cfg_dir = config_dir(project_root)
+    user_layers_result = load_user_layers(cfg_dir)
+    if isinstance(user_layers_result, Left):
+        typer.echo(f"Error: {user_layers_result.error}", err=True)
+        raise typer.Exit(1)
+    valid_layers = _DEFAULT_LAYERS | user_layers_result.value
+
     import_result = import_prompt_path()
     if isinstance(import_result, Left):
         typer.echo(f"Error: {import_result.error}", err=True)
@@ -103,7 +112,12 @@ def enrich(
     repo = _open_repo(project_root)
     config = from_environ()
     llm_log = create_llm_log(logs_dir(project_root))
-    client = LlmClient(config, llm_log=llm_log, system_prompt=custom_prompt)
+    client = LlmClient(
+        config,
+        llm_log=llm_log,
+        system_prompt=custom_prompt,
+        valid_layers=None if custom_prompt else valid_layers,
+    )
     ping_result = client.ping()
     if isinstance(ping_result, Left):
         typer.echo(f"Error: LLM unreachable — {ping_result.error}", err=True)
@@ -142,7 +156,9 @@ def enrich(
         refresh_per_second=20,
         transient=False,
     ) as live:
-        walk_result = run_walk(project_root, index_path, known_files=repo.load_known_files())
+        walk_result = run_walk(
+            project_root, index_path, known_files=repo.load_known_files(), config_dir=cfg_dir
+        )
         if isinstance(walk_result, Left):
             typer.echo(f"Error: {walk_result.error}", err=True)
             raise typer.Exit(1)
@@ -168,6 +184,7 @@ def enrich(
             language_filter=language_val,
             extra_instruction=message,
             path_filter=file,
+            valid_layers=valid_layers,
         )
         elapsed = time.perf_counter() - started
 

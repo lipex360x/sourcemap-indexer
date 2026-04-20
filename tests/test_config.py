@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from sourcemap_indexer.config import (
+    config_dir,
     db_path,
     default_prompt_export_path,
     find_project_root,
@@ -130,3 +131,19 @@ def test_default_prompt_export_path_follows_custom_maps_dir(
 ) -> None:
     monkeypatch.setenv("SOURCEMAP_MAPS_DIR", "out/maps")
     assert default_prompt_export_path(tmp_path) == tmp_path / "out" / "maps" / "prompt.md"
+
+
+def test_config_dir_returns_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SOURCEMAP_CONFIG_DIR", raising=False)
+    assert config_dir(tmp_path) == tmp_path / ".sourcemap"
+
+
+def test_config_dir_relative_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_CONFIG_DIR", ".custom")
+    assert config_dir(tmp_path) == tmp_path / ".custom"
+
+
+def test_config_dir_absolute_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    abs_dir = tmp_path / "my" / "config"
+    monkeypatch.setenv("SOURCEMAP_CONFIG_DIR", str(abs_dir))
+    assert config_dir(tmp_path) == abs_dir

@@ -23,17 +23,11 @@ class Language(StrEnum):
     OTHER = "other"
 
 
-class Layer(StrEnum):
-    DOMAIN = "domain"
-    INFRA = "infra"
-    APPLICATION = "application"
-    CLI = "cli"
-    HOOK = "hook"
-    LIB = "lib"
-    CONFIG = "config"
-    DOC = "doc"
-    TEST = "test"
-    UNKNOWN = "unknown"
+Layer = str
+
+_DEFAULT_LAYERS: frozenset[str] = frozenset(
+    {"domain", "infra", "application", "cli", "hook", "lib", "config", "doc", "test", "unknown"}
+)
 
 
 class Stability(StrEnum):

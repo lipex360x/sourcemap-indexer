@@ -42,9 +42,18 @@ def detect_language(path: Path) -> Language:
 def load_ignore_patterns(
     root: Path,
     extra_ignore: list[str] | None = None,
+    config_dir: Path | None = None,
 ) -> Either[str, pathspec.PathSpec]:
     patterns = list(DEFAULT_IGNORE) + list(extra_ignore or [])
-    for ignore_file in (root / ".gitignore", root / ".sourcemapignore"):
+    config_ignore = (config_dir / "ignore") if config_dir else None
+    root_sourcemapignore = root / ".sourcemapignore"
+    if config_ignore is not None and config_ignore.exists():
+        sourcemapignore: Path | None = config_ignore
+    elif root_sourcemapignore.exists():
+        sourcemapignore = root_sourcemapignore
+    else:
+        sourcemapignore = None
+    for ignore_file in filter(None, (root / ".gitignore", sourcemapignore)):
         if ignore_file.exists():
             try:
                 patterns.extend(ignore_file.read_text(encoding="utf-8").splitlines())
@@ -61,8 +70,9 @@ def walk_project(
     root: Path,
     known_files: dict[str, tuple[int, int, int, str]] | None = None,
     extra_ignore: list[str] | None = None,
+    config_dir: Path | None = None,
 ) -> Either[str, list[WalkedFile]]:
-    spec_result = load_ignore_patterns(root, extra_ignore=extra_ignore)
+    spec_result = load_ignore_patterns(root, extra_ignore=extra_ignore, config_dir=config_dir)
     if isinstance(spec_result, Left):
         return spec_result
     spec = spec_result.value

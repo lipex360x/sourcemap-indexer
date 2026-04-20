@@ -16,17 +16,31 @@ def _output_dir_pattern(root: Path, output_path: Path) -> str | None:
         return None
 
 
+def _relative_dir_pattern(root: Path, directory: Path) -> str | None:
+    try:
+        return str(directory.relative_to(root)) + "/"
+    except ValueError:
+        return None
+
+
 def run_walk(
     root: Path,
     output_path: Path,
     known_files: dict[str, tuple[int, int, int, str]] | None = None,
     extra_ignore: list[str] | None = None,
+    config_dir: Path | None = None,
 ) -> Either[str, int]:
-    output_dir = _output_dir_pattern(root, output_path)
-    combined = list(extra_ignore or [])
-    if output_dir:
-        combined.append(output_dir)
-    walked_result = walk_project(root, known_files=known_files, extra_ignore=combined or None)
+    auto_exclude = filter(
+        None,
+        [
+            _output_dir_pattern(root, output_path),
+            _relative_dir_pattern(root, config_dir) if config_dir else None,
+        ],
+    )
+    combined = list(extra_ignore or []) + list(auto_exclude)
+    walked_result = walk_project(
+        root, known_files=known_files, extra_ignore=combined or None, config_dir=config_dir
+    )
     if isinstance(walked_result, Left):
         return walked_result
     walked = walked_result.value

@@ -41,6 +41,7 @@ def run_enrich(
     language_filter: Language | None = None,
     extra_instruction: str | None = None,
     path_filter: str | None = None,
+    valid_layers: frozenset[str] | None = None,
 ) -> Either[str, EnrichReport]:
     items_result = repository.find_needs_llm(
         limit=batch_limit,
@@ -75,7 +76,7 @@ def run_enrich(
         if item.size_bytes == 0:
             stub = item.with_llm_enrichment(
                 purpose="Empty file",
-                layer=Layer.UNKNOWN,
+                layer="unknown",
                 stability=Stability.UNKNOWN,
                 tags=frozenset({"empty-file"}),
                 side_effects=frozenset(),
@@ -106,6 +107,14 @@ def run_enrich(
             continue
 
         result_data = enrich_result.value
+        if valid_layers is not None and result_data.layer not in valid_layers:
+            failed += 1
+            done += 1
+            errors.append(f"invalid-layer: {item.path}")
+            if on_progress:
+                on_progress(item.path, False, done, total_items)
+            continue
+
         updated = item.with_llm_enrichment(
             purpose=result_data.purpose,
             layer=result_data.layer,

@@ -5,11 +5,12 @@ import json
 import httpx
 import pytest
 
-from sourcemap_indexer.domain.value_objects import Language, Layer, SideEffect, Stability
+from sourcemap_indexer.domain.value_objects import Language, SideEffect, Stability
 from sourcemap_indexer.infra.llm_client import (
     EnrichmentResult,
     LlmClient,
     LlmConfig,
+    build_system_prompt,
     from_environ,
 )
 from sourcemap_indexer.lib.either import Left, Right
@@ -166,7 +167,7 @@ def test_enrich_returns_right_for_valid_response() -> None:
     result = client.enrich("src/auth.py", Language.PY, "def verify(token): ...")
     assert isinstance(result, Right)
     assert result.value.purpose == "Validates JWT tokens"
-    assert result.value.layer == Layer.INFRA
+    assert result.value.layer == "infra"
     assert result.value.stability == Stability.STABLE
     assert SideEffect.NETWORK in result.value.side_effects
     assert "auth" in result.value.tags
@@ -215,12 +216,12 @@ def test_enrich_returns_left_on_timeout() -> None:
     assert result.error == "llm-timeout"
 
 
-def test_enrich_maps_unknown_layer_to_unknown() -> None:
+def test_enrich_passes_layer_string_through() -> None:
     payload = {**_VALID_PAYLOAD, "layer": "nonexistent_layer"}
     client = _client_with(_mock_response(payload))
     result = client.enrich("src/f.py", Language.PY, "code")
     assert isinstance(result, Right)
-    assert result.value.layer == Layer.UNKNOWN
+    assert result.value.layer == "nonexistent_layer"
 
 
 def test_enrich_maps_unknown_stability_to_unknown() -> None:
@@ -559,3 +560,34 @@ def test_enrich_fails_after_two_parse_errors() -> None:
     assert isinstance(result, Left)
     assert result.error == "llm-parse-error"
     assert call_count == 2
+
+
+def test_build_system_prompt_contains_custom_layers() -> None:
+    prompt = build_system_prompt(frozenset({"controller", "service", "unknown"}))
+    assert "controller" in prompt
+    assert "service" in prompt
+
+
+def test_build_system_prompt_default_layers_match_system_prompt() -> None:
+    from sourcemap_indexer.domain.value_objects import _DEFAULT_LAYERS
+    from sourcemap_indexer.infra.llm_client import SYSTEM_PROMPT
+
+    assert build_system_prompt(_DEFAULT_LAYERS) == SYSTEM_PROMPT
+
+
+def test_llm_client_uses_valid_layers_in_prompt() -> None:
+    captured: list[str] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        captured.append(body["messages"][0]["content"])
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(capture)
+    custom_layers = frozenset({"controller", "service", "unknown"})
+    client = LlmClient(
+        LlmConfig(), http_client=httpx.Client(transport=transport), valid_layers=custom_layers
+    )
+    client.enrich("src/f.py", Language.PY, "code")
+    assert "controller" in captured[0]
+    assert "service" in captured[0]

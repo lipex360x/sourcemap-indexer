@@ -6,7 +6,6 @@ from pathlib import Path
 import yaml
 
 from sourcemap_indexer.application.sync import SyncReport, run_sync
-from sourcemap_indexer.domain.value_objects import Layer
 from sourcemap_indexer.infra.migrator import init_db
 from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
 from sourcemap_indexer.lib.either import Left, Right
@@ -115,7 +114,7 @@ def test_sync_preserves_semantic_fields_on_update(tmp_path: Path) -> None:
     assert found_first.value is not None
     enriched = found_first.value.with_llm_enrichment(
         purpose="entry point",
-        layer=Layer.APPLICATION,
+        layer="application",
         stability=found_first.value.stability,
         tags=frozenset({"main", "cli"}),
         side_effects=frozenset(),
@@ -130,7 +129,7 @@ def test_sync_preserves_semantic_fields_on_update(tmp_path: Path) -> None:
     assert found.value is not None
     assert found.value.purpose == "entry point"
     assert found.value.tags == frozenset({"main", "cli"})
-    assert found.value.layer == Layer.APPLICATION
+    assert found.value.layer == "application"
 
 
 def test_sync_soft_deletes_missing_paths(tmp_path: Path) -> None:

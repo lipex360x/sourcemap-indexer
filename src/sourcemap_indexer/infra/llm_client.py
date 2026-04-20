@@ -9,25 +9,39 @@ from typing import Any
 
 import httpx
 
-from sourcemap_indexer.domain.value_objects import Language, Layer, SideEffect, Stability
+from sourcemap_indexer.domain.value_objects import (
+    _DEFAULT_LAYERS,
+    Language,
+    Layer,
+    SideEffect,
+    Stability,
+)
 from sourcemap_indexer.lib.either import Either, Right, left, right
 from sourcemap_indexer.lib.llm_log import LlmLog
 
-SYSTEM_PROMPT = (
-    "You are a code analyser. You receive a source file and return ONLY valid JSON, "
-    "no markdown fence, no extra text, no comments. The JSON follows THIS exact schema:\n\n"
-    '{"purpose": "string — 1 to 2 sentences in English describing WHAT the file does and '
-    'WHY it exists. No implementation details.", '
-    '"tags": ["array of 3 to 7 kebab-case strings — semantic concepts, not obvious technologies"], '
-    '"layer": "domain | infra | application | cli | hook | lib | config | doc | test | unknown", '
-    '"stability": "one of: core | stable | experimental | deprecated | unknown", '
-    '"side_effects": ["zero or more of: writes_fs | spawns_process | network | git | environ"], '
-    '"invariants": ["zero to three short strings — critical constraints"]}\n\n'
-    "Hard rules:\n"
-    "- Reply with ONLY the JSON object. Zero text before or after.\n"
-    '- If unsure about a field, use "unknown" (enums) or empty array.\n'
-    "- Never include credentials or absolute paths in purpose/tags."
-)
+
+def build_system_prompt(valid_layers: frozenset[str]) -> str:
+    layers_str = " | ".join(sorted(valid_layers))
+    return (
+        "You are a code analyser. You receive a source file and return ONLY valid JSON, "
+        "no markdown fence, no extra text, no comments. The JSON follows THIS exact schema:\n\n"
+        '{"purpose": "string — 1 to 2 sentences in English describing WHAT the file does '
+        'and WHY it exists. No implementation details.", '
+        '"tags": ["array of 3 to 7 kebab-case strings — semantic concepts, '
+        'not obvious technologies"], '
+        f'"layer": "one of: {layers_str}", '
+        '"stability": "one of: core | stable | experimental | deprecated | unknown", '
+        '"side_effects": '
+        '["zero or more of: writes_fs | spawns_process | network | git | environ"], '
+        '"invariants": ["zero to three short strings — critical constraints"]}\n\n'
+        "Hard rules:\n"
+        "- Reply with ONLY the JSON object. Zero text before or after.\n"
+        '- If unsure about a field, use "unknown" (enums) or empty array.\n'
+        "- Never include credentials or absolute paths in purpose/tags."
+    )
+
+
+SYSTEM_PROMPT = build_system_prompt(_DEFAULT_LAYERS)
 
 _JSON_BLOCK_RE = re.compile(r"\{.*\}", re.DOTALL)
 
@@ -92,10 +106,7 @@ def _parse_enrichment(raw: str) -> Either[str, EnrichmentResult]:
         except json.JSONDecodeError:
             return left("llm-parse-error")
 
-    try:
-        layer = Layer(data.get("layer", "unknown"))
-    except ValueError:
-        layer = Layer.UNKNOWN
+    layer: Layer = str(data.get("layer", "unknown"))
 
     try:
         stability = Stability(data.get("stability", "unknown"))
@@ -126,11 +137,17 @@ class LlmClient:
         http_client: httpx.Client | None = None,
         llm_log: LlmLog | None = None,
         system_prompt: str | None = None,
+        valid_layers: frozenset[str] | None = None,
     ) -> None:
         self._config = config
         self._http = http_client or httpx.Client(timeout=config.timeout_seconds)
         self._llm_log = llm_log
-        self._system_prompt = system_prompt if system_prompt is not None else SYSTEM_PROMPT
+        if system_prompt is not None:
+            self._system_prompt = system_prompt
+        elif valid_layers is not None:
+            self._system_prompt = build_system_prompt(valid_layers)
+        else:
+            self._system_prompt = SYSTEM_PROMPT
 
     def _auth_headers(self) -> dict[str, str]:
         if self._config.api_key:

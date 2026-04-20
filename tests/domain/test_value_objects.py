@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from sourcemap_indexer.domain.value_objects import Language, Layer, SideEffect, Stability
+from sourcemap_indexer.domain.value_objects import (
+    _DEFAULT_LAYERS,
+    Language,
+    Layer,
+    SideEffect,
+    Stability,
+)
 
 
 def test_language_py_value() -> None:
@@ -12,11 +18,11 @@ def test_language_has_all_expected_members() -> None:
     assert {member.value for member in Language} == expected
 
 
-def test_layer_unknown_value() -> None:
-    assert Layer.UNKNOWN == "unknown"
+def test_layer_is_str_alias() -> None:
+    assert Layer is str
 
 
-def test_layer_has_all_expected_members() -> None:
+def test_default_layers_contains_all_expected() -> None:
     expected = {
         "domain",
         "infra",
@@ -29,7 +35,16 @@ def test_layer_has_all_expected_members() -> None:
         "test",
         "unknown",
     }
-    assert {member.value for member in Layer} == expected
+    assert expected == _DEFAULT_LAYERS
+
+
+def test_layer_unknown_is_valid_default() -> None:
+    assert "unknown" in _DEFAULT_LAYERS
+
+
+def test_layer_value_is_plain_str() -> None:
+    layer: Layer = "domain"
+    assert isinstance(layer, str)
 
 
 def test_stability_has_all_expected_members() -> None:
@@ -44,7 +59,3 @@ def test_side_effect_has_all_expected_members() -> None:
 
 def test_language_is_str_subclass() -> None:
     assert isinstance(Language.PY, str)
-
-
-def test_layer_is_str_subclass() -> None:
-    assert isinstance(Layer.DOMAIN, str)
