@@ -425,3 +425,51 @@ def test_install_skill_creates_file(tmp_path: Path) -> None:
     assert skill.exists()
     assert "sourcemap" in skill.read_text()
     assert "Skill installed" in result.output
+
+
+def test_export_prompt_creates_file(tmp_path: Path) -> None:
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["enrich", "--root", str(tmp_path), "--export-prompt"])
+    assert result.exit_code == 0
+    prompt_file = tmp_path / ".docs" / "maps" / "prompt.txt"
+    assert prompt_file.exists()
+    assert len(prompt_file.read_text()) > 0
+
+
+def test_export_prompt_exits_without_enriching(tmp_path: Path) -> None:
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["enrich", "--root", str(tmp_path), "--export-prompt"])
+    assert result.exit_code == 0
+    assert "exported" in result.output
+
+
+def test_export_prompt_content_matches_default(tmp_path: Path) -> None:
+    from sourcemap_indexer.infra.llama_client import SYSTEM_PROMPT
+
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["enrich", "--root", str(tmp_path), "--export-prompt"])
+    prompt_file = tmp_path / ".docs" / "maps" / "prompt.txt"
+    assert prompt_file.read_text(encoding="utf-8") == SYSTEM_PROMPT
+
+
+def test_enrich_uses_custom_prompt_when_file_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sourcemap_indexer.cli as cli_module
+    from sourcemap_indexer.application.enrich import EnrichReport
+    from sourcemap_indexer.lib.either import right
+
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
+    monkeypatch.setattr(cli_module.LlamaClient, "ping", lambda _self: right(None))
+    monkeypatch.setattr(
+        cli_module,
+        "run_enrich",
+        lambda *_args, **_kwargs: right(EnrichReport(enriched=1, failed=0, skipped=0, errors=())),
+    )
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    prompt_file = tmp_path / ".docs" / "maps" / "prompt.txt"
+    prompt_file.write_text("custom instructions here", encoding="utf-8")
+    result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "prompt.txt" in result.output

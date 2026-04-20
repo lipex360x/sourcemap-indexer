@@ -378,3 +378,38 @@ def test_enrich_without_llm_log_still_works() -> None:
     client = LlamaClient(LlmConfig(), http_client=httpx.Client(transport=transport))
     result = client.enrich("src/f.py", Language.PY, "code")
     assert isinstance(result, Right)
+
+
+def test_custom_system_prompt_is_sent_to_llm() -> None:
+    captured: list[str] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        captured.append(body["messages"][0]["content"])
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(capture)
+    client = LlamaClient(
+        LlmConfig(),
+        http_client=httpx.Client(transport=transport),
+        system_prompt="my custom instructions",
+    )
+    client.enrich("src/f.py", Language.PY, "code")
+    assert len(captured) == 1
+    assert captured[0] == "my custom instructions"
+
+
+def test_default_system_prompt_used_when_none_passed() -> None:
+    from sourcemap_indexer.infra.llama_client import SYSTEM_PROMPT
+
+    captured: list[str] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        captured.append(body["messages"][0]["content"])
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(capture)
+    client = LlamaClient(LlmConfig(), http_client=httpx.Client(transport=transport))
+    client.enrich("src/f.py", Language.PY, "code")
+    assert captured[0] == SYSTEM_PROMPT

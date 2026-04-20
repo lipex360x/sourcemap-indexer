@@ -4,7 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from sourcemap_indexer.config import db_path, find_project_root, index_yaml_path, logs_dir, maps_dir
+from sourcemap_indexer.config import (
+    db_path,
+    find_project_root,
+    index_yaml_path,
+    logs_dir,
+    maps_dir,
+    prompt_path,
+)
 from sourcemap_indexer.lib.either import Left, Right
 
 
@@ -84,3 +91,13 @@ def test_logs_dir_absolute_maps_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     abs_maps = tmp_path / "data" / "maps"
     monkeypatch.setenv("SOURCEMAP_MAPS_DIR", str(abs_maps))
     assert logs_dir(tmp_path) == abs_maps / "logs"
+
+
+def test_prompt_path_default(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SOURCEMAP_MAPS_DIR", raising=False)
+    assert prompt_path(tmp_path) == tmp_path / ".docs" / "maps" / "prompt.txt"
+
+
+def test_prompt_path_custom_maps_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_MAPS_DIR", "out/maps")
+    assert prompt_path(tmp_path) == tmp_path / "out" / "maps" / "prompt.txt"

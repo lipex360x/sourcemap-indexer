@@ -13,7 +13,7 @@ from sourcemap_indexer.domain.value_objects import Language, Layer, SideEffect, 
 from sourcemap_indexer.lib.either import Either, Right, left, right
 from sourcemap_indexer.lib.llm_log import LlmLog
 
-_SYSTEM_PROMPT = (
+SYSTEM_PROMPT = (
     "You are a code analyser. You receive a source file and return ONLY valid JSON, "
     "no markdown fence, no extra text, no comments. The JSON follows THIS exact schema:\n\n"
     '{"purpose": "string — 1 to 2 sentences in English describing WHAT the file does and '
@@ -113,10 +113,12 @@ class LlamaClient:
         config: LlmConfig,
         http_client: httpx.Client | None = None,
         llm_log: LlmLog | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         self._config = config
         self._http = http_client or httpx.Client(timeout=config.timeout_seconds)
         self._llm_log = llm_log
+        self._system_prompt = system_prompt if system_prompt is not None else SYSTEM_PROMPT
 
     def _auth_headers(self) -> dict[str, str]:
         if self._config.api_key:
@@ -140,7 +142,7 @@ class LlamaClient:
     ) -> Either[str, EnrichmentResult]:
         if len(content) > self._config.max_chars:
             content = content[: self._config.max_chars]
-        system = _SYSTEM_PROMPT
+        system = self._system_prompt
         if extra_instruction:
             system = system + f"\n\nAdditional instruction: {extra_instruction}"
         user_prompt = f"Path: {path}\nLanguage: {language}\n\n---\n{content}"
