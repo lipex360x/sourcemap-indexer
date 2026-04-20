@@ -6,43 +6,43 @@
 uv run pytest
 ```
 
-Coverage mínimo: 95%. O pré-commit falha se não atingir.
+Minimum coverage: 95%. Pre-commit fails if not reached.
 
-## Arquitetura em camadas
+## Layer architecture
 
 ```
-cli.py          → entrada CLI (typer)
-application/    → orquestração (walk.py, sync.py, enrich.py)
+cli.py          → CLI entry point (typer)
+application/    → orchestration (walk.py, sync.py, enrich.py)
 infra/          → I/O: SQLite, filesystem, LLM client
-domain/         → entidades e value objects puros
+domain/         → pure entities and value objects
 lib/            → Either monad, logger
 ```
 
-Application pode importar infra. Domain não importa nada acima de si.
+Application may import infra. Domain imports nothing above itself.
 
-## Convenções de código
+## Code conventions
 
-Leia `.brain/.docs/references/code-conventions.md` (global) antes de escrever código.
+Read `.brain/.docs/references/code-conventions.md` (global) before writing any code.
 
-Regras críticas deste projeto:
-- Sem comentários em `.py` (exceto shebangs, `# noqa`, `# type: ignore`)
-- Sem abreviações banidas: `msg`, `env`, `src`, `exc`, `ctx`, `cfg`, `err`, `buf`, `cmd`, `res`, `tmp`
-- Comprimento máximo: 100 chars por linha
-- `Either[str, T]` para funções que podem falhar — retorna `left("error-token")` ou `right(value)`
+Critical rules for this project:
+- No comments in `.py` (except shebangs, `# noqa`, `# type: ignore`)
+- No banned abbreviations: `msg`, `env`, `src`, `exc`, `ctx`, `cfg`, `err`, `buf`, `cmd`, `res`, `tmp`
+- Max line length: 100 chars
+- `Either[str, T]` for functions that can fail — return `left("error-token")` or `right(value)`
 - Logger: `from sourcemap_indexer.lib.log import create_logger`
 
-## Fluxo do comando `walk`
+## Walk command flow
 
 ```
 CLI walk
-  → repo.load_known_files()   ← SELECT do SQLite (mtime, size, lines, hash)
+  → repo.load_known_files()   ← single SELECT from SQLite (mtime, size, lines, hash)
   → run_walk(root, output, known_files)
-      → walk_project(root, known_files)   ← fast-path: skip read se mtime+size batem
-      → escreve index.yaml
-  → run_sync(index.yaml, repo)            ← reconcilia SQLite
+      → walk_project(root, known_files)   ← fast-path: skip read_bytes if mtime+size match
+      → writes index.yaml
+  → run_sync(index.yaml, repo)            ← reconciles SQLite
 ```
 
-## Issues planejadas (follow-ups da issue #3)
+## Planned follow-up issues (from issue #3)
 
 - `perf(walk): use st_mtime_ns for same-second robustness`
 - `perf(walk): replace Path.rglob with os.scandir`
