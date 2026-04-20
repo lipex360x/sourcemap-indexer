@@ -10,23 +10,109 @@
 
 | # | Section |
 |---|---------|
-| 1 | [Prerequisites](#prerequisites) |
-| 2 | [Installation](#installation) |
-| 3 | [Quickstart](#quickstart) |
-| 4 | [Commands](#commands) |
-| 5 | [Environment variables](#env) |
-| 6 | [Ignoring files](#ignoring) |
-| 7 | [Plugging in a different LLM](#llm) |
-| 8 | [AI assistant skill](#skill) |
-| 9 | [Post-commit hook](#hook) |
-| 10 | [SQLite schema](#schema) |
-| 11 | [Dev setup](#dev) |
+| 1 | [How it works](#overview) |
+| 2 | [Prerequisites](#prerequisites) |
+| 3 | [Installation](#installation) |
+| 4 | [Quickstart](#quickstart) |
+| 5 | [Commands](#commands) |
+| 6 | [Environment variables](#env) |
+| 7 | [Ignoring files](#ignoring) |
+| 8 | [Plugging in a different LLM](#llm) |
+| 9 | [AI assistant skill](#skill) |
+| 10 | [Post-commit hook](#hook) |
+| 11 | [SQLite schema](#schema) |
+| 12 | [Dev setup](#dev) |
+
+---
+
+<a id="overview"></a>
+
+## 1. How it works
+
+sourcemap-indexer runs in three phases. Each phase builds on the previous one:
+
+```
+sourcemap init     →   sourcemap walk     →   sourcemap enrich
+  (one-time)            (after changes)         (calls LLM)
+```
+
+### Phase 1 — `sourcemap init`
+
+Creates the directory structure needed by the other commands:
+
+```
+your-project/
+├── .docs/
+│   └── maps/
+│       ├── index.db          ← SQLite database (all metadata lives here)
+│       └── index.yaml        ← YAML snapshot of the last walk (intermediate file)
+└── .sourcemapignore          ← gitignore-syntax exclusion rules
+```
+
+> [!NOTE]
+> `init` is idempotent — safe to run multiple times. It never overwrites an existing `.sourcemapignore` or database.
+
+### Phase 2 — `sourcemap walk`
+
+Scans the project tree and updates the database in two internal steps:
+
+1. **Scan** — traverses all files (respecting `.gitignore` and `.sourcemapignore`), collects path, language, line count, size, content hash, and last-modified timestamp
+2. **Write** — serializes the result to `.docs/maps/index.yaml` (human-readable snapshot of every tracked file)
+3. **Sync** — reads `index.yaml` and reconciles the SQLite database:
+   - New file → inserted with `needs_llm = true`
+   - File changed (hash diff) → updated with `needs_llm = true`
+   - File removed → soft-deleted (kept in DB with `deleted_at` timestamp)
+   - File unchanged → skipped
+
+<details>
+<summary>What index.yaml looks like</summary>
+
+```yaml
+version: 1
+generated_at: 1745000000
+root: /path/to/your-project
+files:
+  - path: src/auth/login.ts
+    language: ts
+    lines: 82
+    size_bytes: 2104
+    content_hash: a3f1...
+    last_modified: 1744900000
+  - path: src/auth/logout.ts
+    ...
+```
+
+This file is checked in to source control optionally — it gives a plain-text audit trail of what was indexed.
+
+</details>
+
+### Phase 3 — `sourcemap enrich`
+
+For every file marked `needs_llm = true`, enrichment:
+
+1. **Reads** the file content from disk
+2. **Sends** path + language + content to the LLM with a structured prompt
+3. **Stores** the LLM response back into SQLite:
+
+| Field | What it contains |
+|-------|-----------------|
+| `purpose` | One-sentence description of what the file does |
+| `layer` | Architectural layer (`domain`, `infra`, `application`, `cli`, `lib`, …) |
+| `stability` | `core`, `stable`, `experimental`, or `deprecated` |
+| `tags` | Semantic keywords (e.g. `authentication`, `rate-limiting`) |
+| `side_effects` | I/O boundaries (`network`, `writes_fs`, `git`, `spawns_process`) |
+| `invariants` | Key behavioral contracts the file upholds |
+
+After enrichment, `needs_llm` is cleared and `llm_hash` is set to the content hash at the time of enrichment — so future walks can detect drift.
+
+> [!IMPORTANT]
+> Enrichment calls the LLM for every pending file. For large codebases, use `--limit N` to process in batches and avoid timeouts or rate limits.
 
 ---
 
 <a id="prerequisites"></a>
 
-## 1. Prerequisites
+## 2. Prerequisites
 
 | Requirement | Version | Notes |
 |-------------|---------|-------|
@@ -44,7 +130,7 @@
 
 <a id="installation"></a>
 
-## 2. Installation
+## 3. Installation
 
 ```bash
 uv tool install "git+https://github.com/lipex360x/sourcemap-indexer.git@main"
@@ -68,7 +154,7 @@ The binary lives at `~/.local/bin/sourcemap`. The tool environment is at `~/.loc
 
 <a id="quickstart"></a>
 
-## 3. Quickstart
+## 4. Quickstart
 
 ```bash
 cd <your-project>
@@ -82,7 +168,7 @@ sourcemap stats   # overview: total, enriched, pending
 
 <a id="commands"></a>
 
-## 4. Commands
+## 5. Commands
 
 ### Setup
 
@@ -129,7 +215,7 @@ sourcemap stats   # overview: total, enriched, pending
 
 <a id="env"></a>
 
-## 5. Environment variables
+## 6. Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -154,7 +240,7 @@ SOURCEMAP_LLM_API_KEY=your-api-key
 
 <a id="ignoring"></a>
 
-## 6. Ignoring files
+## 7. Ignoring files
 
 `.sourcemapignore` uses the same syntax as `.gitignore`. Both files are read automatically — no extra config needed.
 
@@ -202,7 +288,7 @@ Pattern rules:
 
 <a id="llm"></a>
 
-## 7. Plugging in a different LLM
+## 8. Plugging in a different LLM
 
 The enrichment client targets any OpenAI-compatible endpoint:
 
@@ -224,7 +310,7 @@ sourcemap enrich --limit 10
 
 <a id="skill"></a>
 
-## 8. AI assistant skill
+## 9. AI assistant skill
 
 Install the bundled skill file so your AI assistant can query the index directly:
 
@@ -240,7 +326,7 @@ sourcemap install-skill --target <your-tool-skills-dir>
 
 <a id="hook"></a>
 
-## 9. Post-commit hook (auto-walk on every commit)
+## 10. Post-commit hook (auto-walk on every commit)
 
 ```bash
 bash scripts/bash/install-hook.sh
@@ -255,7 +341,7 @@ Installs a `post-commit` hook that runs `sourcemap walk` after every commit, kee
 
 <a id="schema"></a>
 
-## 10. SQLite schema
+## 11. SQLite schema
 
 ```sql
 items        (id, path, name, language, layer, stability, purpose,
@@ -272,7 +358,7 @@ Layers: `domain | infra | application | cli | hook | lib | config | doc | test |
 
 <a id="dev"></a>
 
-## 11. Dev setup
+## 12. Dev setup
 
 ```bash
 git clone https://github.com/lipex360x/sourcemap-indexer.git
