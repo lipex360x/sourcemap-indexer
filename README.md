@@ -217,42 +217,71 @@ sourcemap stats   # auto-walks first, then shows totals and pending files
 
 ## 5. Commands
 
+All commands are invoked as `sourcemap <command>`.
+
 ### Setup
 
-| Command | Flags | Description |
-|---------|-------|-------------|
-| `sourcemap init` | | Create the maps directory, `.sourcemapignore`, and `index.db` |
-| `sourcemap walk` | | Scan files and sync metadata into SQLite |
+| Command | Description |
+|---------|-------------|
+| `init` | Create the maps directory, `.sourcemapignore`, and `index.db` |
+| `walk` | Scan files and sync metadata into SQLite |
 
 ### Enrichment
 
-| Command | Flags | Description |
-|---------|-------|-------------|
-| `sourcemap enrich` | `--limit N` `--force` `--file <path>` `--layer` `--language` `-m "<msg>"` | Send pending files to the LLM |
-| `sourcemap stale` | | List files whose content changed since the last enrich run |
+| Command | Description |
+|---------|-------------|
+| `enrich` | Send pending files to the LLM |
+| `stale` | List files whose content changed since the last enrich run |
+
+`enrich` flags:
+
+| Flag | Description |
+|------|-------------|
+| `--limit N` | Process at most N files per run |
+| `--force` | Re-enrich already enriched files |
+| `--file <path>` | Target a single specific file |
+| `--layer <layer>` | Filter by architectural layer |
+| `--language <lang>` | Filter by language |
+| `-m "<msg>"` | Inject an extra instruction into the LLM prompt |
+| `--export-prompt` | Export the default prompt to the maps directory for customisation |
 
 ### Exploration
 
-| Command | Flags | Description |
-|---------|-------|-------------|
-| `sourcemap profile` | | Language distribution, inferred layers, test ratio, top files by size |
-| `sourcemap stats` | `--files` `--page N` | Counts by layer and language; bar width = relative file count; green = enriched, yellow = pending |
-| `sourcemap overview` | | Layer × language matrix |
-| `sourcemap domain` | | Enriched domain-layer files with their purpose |
-| `sourcemap effects` | | Files with network or git side effects |
-| `sourcemap tags` | | Top 30 semantic tags by frequency |
-| `sourcemap unstable` | | Experimental or deprecated files |
-| `sourcemap find` | `--tag T` `--layer L` `--language L` | Search files by tag, layer, or language |
-| `sourcemap show <path>` | | Full metadata for a specific file |
-| `sourcemap query "<sql>"` | | Free-form SQL against the index database |
+| Command | Description |
+|---------|-------------|
+| `profile` | Language distribution, inferred layers, test ratio, top files by size |
+| `stats` | Auto-runs walk; counts by layer and language; bar width = relative file count; green = enriched, yellow = pending |
+| `overview` | Layer × language matrix |
+| `domain` | Enriched domain-layer files with their purpose |
+| `effects` | Files with network or git side effects |
+| `tags` | Top 30 semantic tags by frequency |
+| `unstable` | Experimental or deprecated files |
+| `find` | Search files by tag, layer, or language |
+| `show <path>` | Full metadata for a specific file |
+| `query "<sql>"` | Free-form SQL against the index database |
+
+`stats` flags:
+
+| Flag | Description |
+|------|-------------|
+| `--files` | List pending files below the counts |
+| `--page N` | Paginate the pending list (requires `--files`) |
+
+`find` flags:
+
+| Flag | Description |
+|------|-------------|
+| `--tag T` | Filter by semantic tag |
+| `--layer L` | Filter by architectural layer |
+| `--language L` | Filter by language |
 
 ### Maintenance
 
-| Command | Flags | Description |
-|---------|-------|-------------|
-| `sourcemap reset` | | Delete the index (offers a timestamped backup before wiping) |
-| `sourcemap restore` | | Restore `index.db` from a previously saved `.bak` file |
-| `sourcemap install-skill` | `--target <dir>` | Copy the skill file to your AI assistant's skills directory |
+| Command | Description |
+|---------|-------------|
+| `reset` | Delete the index (offers a timestamped backup before wiping) |
+| `restore` | Restore `index.db` from a previously saved `.bak` file |
+| `install-skill` | Copy the skill file to your AI assistant's skills directory (`--target <dir>`) |
 
 [↑ back to top](#topo)
 
