@@ -459,6 +459,16 @@ def test_install_skill_creates_file(tmp_path: Path) -> None:
     assert "Skill installed" in result.output
 
 
+def test_enrich_export_llm_prompt_exits_without_enriching(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["enrich", "--root", str(tmp_path), "--export-llm-prompt"])
+    assert result.exit_code == 0
+    assert "exported" in result.output
+
+
 def test_enrich_export_llm_prompt_creates_default_md_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
