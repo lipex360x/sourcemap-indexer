@@ -29,11 +29,15 @@
 
 ## 1. How it works
 
-sourcemap-indexer runs in three phases. Each phase builds on the previous one:
+sourcemap-indexer runs in three phases. Each phase writes into the same SQLite database, adding a new layer of information on top of what the previous phase produced:
 
-```
-sourcemap init     →   sourcemap walk     →   sourcemap enrich
-  (one-time)            (after changes)         (calls LLM)
+```mermaid
+flowchart LR
+    A["sourcemap init<br/><i>one-time</i>"] --> B[("index.db<br/>empty schema")]
+    B --> C["sourcemap walk<br/><i>after code changes</i>"]
+    C --> D[("index.db<br/>paths, languages,<br/>hashes, line counts")]
+    D --> E["sourcemap enrich<br/><i>calls an LLM</i>"]
+    E --> F[("index.db<br/>+ purpose, layer,<br/>tags, side effects")]
 ```
 
 > [!NOTE]
@@ -394,16 +398,50 @@ Installs a `post-commit` hook that runs `sourcemap walk` after every commit, kee
 
 ## 11. SQLite schema
 
-```sql
-items        (id, path, name, language, layer, stability, purpose,
-              lines, size_bytes, content_hash, llm_hash,
-              needs_llm, deleted_at, created_at, updated_at, llm_at)
-tags         (item_id, tag)
-side_effects (item_id, effect)
-invariants   (item_id, invariant)
+One core table (`items`) holds a row per file. Three satellite tables store the multi-valued LLM output (a file has many tags, many side effects, many invariants):
+
+```mermaid
+erDiagram
+    items ||--o{ tags : has
+    items ||--o{ side_effects : has
+    items ||--o{ invariants : has
+
+    items {
+        int id PK
+        string path
+        string name
+        string language
+        string layer
+        string stability
+        string purpose
+        int lines
+        int size_bytes
+        string content_hash
+        string llm_hash
+        bool needs_llm
+        timestamp deleted_at
+        timestamp llm_at
+    }
+    tags {
+        int item_id FK
+        string tag
+    }
+    side_effects {
+        int item_id FK
+        string effect
+    }
+    invariants {
+        int item_id FK
+        string invariant
+    }
 ```
 
+**Walk fills**: `path`, `name`, `language`, `lines`, `size_bytes`, `content_hash`, `needs_llm`, `deleted_at`.
+**Enrich fills**: `purpose`, `layer`, `stability`, `llm_hash`, `llm_at`, plus rows in `tags` / `side_effects` / `invariants`.
+
 Layers: `domain | infra | application | cli | hook | lib | config | doc | test | unknown`
+
+Side effects: `writes_fs | spawns_process | network | git | environ`
 
 [↑ back to top](#topo)
 
