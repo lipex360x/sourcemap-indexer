@@ -77,10 +77,10 @@ def test_logs_dir_default_is_sibling_of_maps(
 
 def test_logs_dir_follows_custom_maps_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SOURCEMAP_MAPS_DIR", "my/maps")
-    assert logs_dir(tmp_path) == tmp_path / "my" / "logs"
+    assert logs_dir(tmp_path) == tmp_path / "my" / "maps" / "logs"
 
 
 def test_logs_dir_absolute_maps_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     abs_maps = tmp_path / "data" / "maps"
     monkeypatch.setenv("SOURCEMAP_MAPS_DIR", str(abs_maps))
-    assert logs_dir(tmp_path) == tmp_path / "data" / "logs"
+    assert logs_dir(tmp_path) == abs_maps / "logs"

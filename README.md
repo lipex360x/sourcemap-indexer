@@ -53,7 +53,7 @@ your-project/
 │   ├── maps/
 │   │   ├── index.db          ← SQLite database (all metadata lives here)
 │   │   └── index.yaml        ← YAML snapshot of the last walk (intermediate file)
-│   └── logs/                 ← LLM debug logs (only when SOURCEMAP_LLM_LOG=1)
+│   └── logs/                 ← LLM debug logs (only when SOURCEMAP_LLM_LOG=1; inside SOURCEMAP_MAPS_DIR if set)
 └── .sourcemapignore          ← gitignore-syntax exclusion rules
 ```
 
@@ -136,7 +136,7 @@ After enrichment, `needs_llm` is cleared and `llm_hash` is set to the content ha
 > Enrichment calls the LLM for every pending file. For large codebases, use `--limit N` to process in batches and avoid timeouts or rate limits.
 
 > [!NOTE]
-> Set `SOURCEMAP_LLM_LOG=1` to record every LLM request and response to a timestamped YAML file in `.docs/logs/`. Each `enrich` session produces one file (`llm-YYYYMMDD-HHMMSSffffff.yaml`) containing one YAML document per enriched file — useful for debugging prompts or auditing model output.
+> Set `SOURCEMAP_LLM_LOG=1` to record every LLM request and response to a timestamped YAML file. Logs land in `.docs/logs/` by default, or inside the directory set by `SOURCEMAP_MAPS_DIR` when customized. Each `enrich` session produces one file (`llm-YYYYMMDD-HHMMSSffffff.yaml`) containing one YAML document per enriched file — useful for debugging prompts or auditing model output.
 
 [↑ back to top](#topo)
 
@@ -266,7 +266,7 @@ sourcemap stats   # auto-walks first, then shows totals and pending files
 | `SOURCEMAP_LLM_URL` | _(required)_ | LLM endpoint (any OpenAI-compatible API) — `enrich` is blocked until this is set |
 | `SOURCEMAP_LLM_MODEL` | _(required)_ | Model name passed to the endpoint — `enrich` is blocked until this is set |
 | `SOURCEMAP_LLM_API_KEY` | _(empty)_ | Bearer token for authenticated providers |
-| `SOURCEMAP_LLM_LOG` | _(off)_ | Set to `1` to write LLM request/response logs to `.docs/logs/` |
+| `SOURCEMAP_LLM_LOG` | _(off)_ | Set to `1` to write LLM request/response logs to `logs/` inside the maps directory (or `.docs/logs/` when using the default location) |
 | `SOURCEMAP_PAGE_SIZE` | `20` | Number of pending files shown per page in `stats` |
 | `SOURCEMAP_MAPS_DIR` | `.docs/maps` | Output directory for `index.db` and `index.yaml` — relative to project root or absolute |
 
