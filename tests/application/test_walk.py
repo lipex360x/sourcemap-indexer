@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from sourcemap_indexer.application.walk import run_walk
@@ -85,3 +86,53 @@ def test_run_walk_yaml_root_is_absolute(tmp_path: Path) -> None:
     run_walk(tmp_path, output)
     data = yaml.safe_load(output.read_text())
     assert Path(data["root"]).is_absolute()
+
+
+def test_run_walk_known_files_none_behaves_as_today(tmp_path: Path) -> None:
+    (tmp_path / "app.py").write_text("x = 1\n")
+    output = tmp_path / "index.yaml"
+    result = run_walk(tmp_path, output, known_files=None)
+    assert isinstance(result, Right)
+    assert result.value == 1
+
+
+def test_run_walk_skips_read_when_known_files_match(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    content = b"x = 1\n"
+    file_path = tmp_path / "app.py"
+    file_path.write_bytes(content)
+    file_stat = file_path.stat()
+    mtime = int(file_stat.st_mtime)
+    size_bytes = file_stat.st_size
+    stored_hash = "ab" * 32
+
+    read_count = 0
+    original_read_bytes = Path.read_bytes
+
+    def counting_read(self: Path) -> bytes:
+        nonlocal read_count
+        read_count += 1
+        return original_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", counting_read)
+
+    known_files = {"app.py": (mtime, size_bytes, 1, stored_hash)}
+    output = tmp_path / "index.yaml"
+    result = run_walk(tmp_path, output, known_files=known_files)
+
+    assert isinstance(result, Right)
+    assert read_count == 0
+
+
+def test_run_walk_ignores_output_dir_dynamically(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text("x = 1\n")
+    output = tmp_path / ".myoutput" / "maps" / "index.yaml"
+    (tmp_path / ".myoutput" / "maps").mkdir(parents=True)
+    (tmp_path / ".myoutput" / "maps" / "index.db").write_text("")
+    result = run_walk(tmp_path, output)
+    assert isinstance(result, Right)
+    data = yaml.safe_load(output.read_text())
+    paths = [f["path"] for f in data["files"]]
+    assert not any(p.startswith(".myoutput") for p in paths)
+    assert "main.py" in paths
