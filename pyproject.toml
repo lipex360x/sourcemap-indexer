@@ -47,7 +47,10 @@ target-version = "py311"
 cache-dir = ".ruff_cache"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "RET"]
+select = ["E", "F", "I", "UP", "B", "SIM", "RET", "C90"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 5
 
 [tool.mypy]
 strict = true
