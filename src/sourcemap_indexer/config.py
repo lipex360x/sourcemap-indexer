@@ -51,3 +51,7 @@ def import_prompt_path() -> Either[str, Path | None]:
 
 def default_prompt_export_path(root: Path) -> Path:
     return maps_dir(root) / "prompt.md"
+
+
+def llm_provider_name() -> str:
+    return os.environ.get("SOURCEMAP_LLM_PROVIDER", "http")

@@ -350,8 +350,9 @@ All commands are invoked as `sourcemap <command>`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SOURCEMAP_LLM_URL` | _(required)_ | LLM endpoint (any OpenAI-compatible API) — `enrich` is blocked until this is set |
-| `SOURCEMAP_LLM_MODEL` | _(required)_ | Model name passed to the endpoint — `enrich` is blocked until this is set |
+| `SOURCEMAP_LLM_PROVIDER` | `http` | LLM backend — `http` (OpenAI-compatible HTTP server) or `claude-cli` (Claude.ai subscription via `claude -p`) |
+| `SOURCEMAP_LLM_URL` | _(required for `http`)_ | LLM endpoint (any OpenAI-compatible API) — `enrich` is blocked until this is set when using `http` provider |
+| `SOURCEMAP_LLM_MODEL` | _(required for `http`)_ | Model name passed to the endpoint — `enrich` is blocked until this is set when using `http` provider |
 | `SOURCEMAP_LLM_API_KEY` | _(empty)_ | Bearer token for authenticated providers |
 | `SOURCEMAP_LLM_LOG` | _(off)_ | Set to `1` to write LLM request/response logs to `logs/` inside the maps directory |
 | `SOURCEMAP_PAGE_SIZE` | `20` | Number of pending files shown per page in `stats` |
@@ -372,6 +373,24 @@ SOURCEMAP_LLM_API_KEY=your-api-key
 
 > [!NOTE]
 > Variables already present in the shell environment take precedence over `.env` values.
+
+### Using `claude-cli` provider
+
+If you have a Claude.ai subscription, you can run enrichment without an API key or local LLM server:
+
+```bash
+# 1. Install and authenticate Claude CLI
+npm install -g @anthropic-ai/claude-code
+claude auth login
+
+# 2. Set the provider
+export SOURCEMAP_LLM_PROVIDER=claude-cli
+
+# 3. Run enrichment as usual
+sourcemap enrich --limit 10
+```
+
+The `claude-cli` provider spawns `claude -p` as a subprocess for each file. No `SOURCEMAP_LLM_URL` or `SOURCEMAP_LLM_MODEL` needed.
 
 [↑ back to top](#top)
 
