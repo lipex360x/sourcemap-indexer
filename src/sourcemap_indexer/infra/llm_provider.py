@@ -24,10 +24,10 @@ def _make_http() -> LLMProvider:
     return HttpLLMProvider(from_environ())
 
 
-def _make_claude_cli() -> LLMProvider:
+def _make_claude_cli(llm_log: Any = None) -> LLMProvider:
     from sourcemap_indexer.infra.claude_cli_provider import ClaudeCliProvider  # noqa: PLC0415
 
-    return ClaudeCliProvider()
+    return ClaudeCliProvider(llm_log=llm_log)
 
 
 _PROVIDERS: dict[str, Any] = {
