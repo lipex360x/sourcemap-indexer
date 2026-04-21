@@ -10,6 +10,7 @@ from sourcemap_indexer.config import (
     find_project_root,
     import_prompt_path,
     index_yaml_path,
+    llm_cli_effort,
     llm_cli_model,
     llm_provider_name,
     logs_dir,
@@ -150,3 +151,13 @@ def test_llm_cli_model_none_when_not_set(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_llm_cli_model_returns_value_when_set(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SOURCEMAP_LLM_CLI_MODEL", "claude-sonnet-4-6")
     assert llm_cli_model() == "claude-sonnet-4-6"
+
+
+def test_llm_cli_effort_none_when_not_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_CLI_EFFORT", raising=False)
+    assert llm_cli_effort() is None
+
+
+def test_llm_cli_effort_returns_value_when_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_CLI_EFFORT", "high")
+    assert llm_cli_effort() == "high"

@@ -119,6 +119,77 @@ def test_claude_cli_passes_model_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "claude-haiku-4-5-20251001" in captured[0]
 
 
+def test_claude_cli_passes_effort_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    import json  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.claude_cli_provider import ClaudeCliProvider  # noqa: PLC0415
+
+    captured: list[list[str]] = []
+    payload = {
+        "purpose": "p",
+        "tags": ["t"],
+        "layer": "infra",
+        "stability": "stable",
+        "side_effects": [],
+        "invariants": [],
+    }
+    wrapper = json.dumps({"result": json.dumps(payload)})
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured.append(args)
+        return subprocess.CompletedProcess(args, 0, stdout=wrapper, stderr="")
+
+    monkeypatch.setenv("SOURCEMAP_LLM_CLI_EFFORT", "high")
+    monkeypatch.delenv("SOURCEMAP_LLM_CLI_MODEL", raising=False)
+    monkeypatch.setattr(shutil, "which", lambda _name: "/usr/bin/claude")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    monkeypatch.setattr(
+        "sourcemap_indexer.infra.claude_cli_provider._check_auth",
+        lambda: None,
+    )
+    ClaudeCliProvider().enrich("app.py", Language.PY, "x = 1")
+    assert "--effort" in captured[0]
+    assert "high" in captured[0]
+
+
+def test_claude_cli_omits_effort_flag_when_not_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    import json  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.claude_cli_provider import ClaudeCliProvider  # noqa: PLC0415
+
+    captured: list[list[str]] = []
+    payload = {
+        "purpose": "p",
+        "tags": ["t"],
+        "layer": "infra",
+        "stability": "stable",
+        "side_effects": [],
+        "invariants": [],
+    }
+    wrapper = json.dumps({"result": json.dumps(payload)})
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured.append(args)
+        return subprocess.CompletedProcess(args, 0, stdout=wrapper, stderr="")
+
+    monkeypatch.delenv("SOURCEMAP_LLM_CLI_EFFORT", raising=False)
+    monkeypatch.delenv("SOURCEMAP_LLM_CLI_MODEL", raising=False)
+    monkeypatch.setattr(shutil, "which", lambda _name: "/usr/bin/claude")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    monkeypatch.setattr(
+        "sourcemap_indexer.infra.claude_cli_provider._check_auth",
+        lambda: None,
+    )
+    ClaudeCliProvider().enrich("app.py", Language.PY, "x = 1")
+    assert "--effort" not in captured[0]
+
+
 def test_claude_cli_omits_model_flag_when_not_set(monkeypatch: pytest.MonkeyPatch) -> None:
     import json  # noqa: PLC0415
     import shutil  # noqa: PLC0415

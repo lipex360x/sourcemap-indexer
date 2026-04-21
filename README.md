@@ -354,6 +354,7 @@ All commands are invoked as `sourcemap <command>`.
 | `SOURCEMAP_LLM_URL` | _(required for `http`)_ | LLM endpoint (any OpenAI-compatible API) — `enrich` is blocked until this is set when using `http` provider |
 | `SOURCEMAP_LLM_MODEL` | _(required for `http`)_ | Model name passed to the endpoint — `enrich` is blocked until this is set when using `http` provider |
 | `SOURCEMAP_LLM_CLI_MODEL` | _(default model)_ | Claude model used by `claude-cli` provider — e.g. `claude-haiku-4-5-20251001`, `claude-sonnet-4-6`, `claude-opus-4-7`. Omit to use Claude's default |
+| `SOURCEMAP_LLM_CLI_EFFORT` | _(default)_ | Effort level for `claude-cli` provider — `low`, `medium`, `high`, `xhigh`, `max`. Controls thinking budget. Omit to use Claude's default |
 | `SOURCEMAP_LLM_API_KEY` | _(empty)_ | Bearer token for authenticated providers |
 | `SOURCEMAP_LLM_LOG` | _(off)_ | Set to `1` to write LLM request/response logs to `logs/` inside the maps directory |
 | `SOURCEMAP_PAGE_SIZE` | `20` | Number of pending files shown per page in `stats` |
@@ -384,9 +385,10 @@ If you have a Claude.ai subscription, you can run enrichment without an API key 
 npm install -g @anthropic-ai/claude-code
 claude auth login
 
-# 2. Set the provider (optionally pick a model)
+# 2. Set the provider (optionally pick a model and effort level)
 export SOURCEMAP_LLM_PROVIDER=claude-cli
-export SOURCEMAP_LLM_CLI_MODEL=claude-haiku-4-5-20251001  # optional — omit to use default
+export SOURCEMAP_LLM_CLI_MODEL=claude-sonnet-4-6       # optional — omit to use default
+export SOURCEMAP_LLM_CLI_EFFORT=high                   # optional — low|medium|high|xhigh|max
 
 # 3. Run enrichment as usual
 sourcemap enrich --limit 10

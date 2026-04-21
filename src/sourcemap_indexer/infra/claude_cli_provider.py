@@ -4,7 +4,7 @@ import json
 import shutil
 import subprocess
 
-from sourcemap_indexer.config import llm_cli_model
+from sourcemap_indexer.config import llm_cli_effort, llm_cli_model
 from sourcemap_indexer.domain.value_objects import Language
 from sourcemap_indexer.infra.llm_client import EnrichmentResult, _parse_enrichment
 from sourcemap_indexer.lib.either import Either, left
@@ -29,10 +29,13 @@ def _build_prompt(
 
 
 def _build_cmd(prompt: str) -> list[str]:
-    model = llm_cli_model()
     cmd = ["claude", "-p", prompt, "--output-format", "json"]
+    model = llm_cli_model()
     if model:
         cmd += ["--model", model]
+    effort = llm_cli_effort()
+    if effort:
+        cmd += ["--effort", effort]
     return cmd
 
 
