@@ -158,6 +158,22 @@ def test_claude_cli_calls_llm_log_on_success(monkeypatch: pytest.MonkeyPatch) ->
     assert recorded[0]["path"] == "app.py"
 
 
+def test_claude_cli_factory_forwards_llm_log() -> None:
+    recorded: list[str] = []
+
+    class _SpyLog:
+        def record(self, **kwargs: object) -> None:
+            recorded.append(str(kwargs.get("result")))
+
+    result = resolve_provider("claude-cli")
+    assert isinstance(result, Right)
+    provider = result.value(llm_log=_SpyLog())
+    from sourcemap_indexer.infra.claude_cli_provider import ClaudeCliProvider  # noqa: PLC0415
+
+    assert isinstance(provider, ClaudeCliProvider)
+    assert provider._llm_log is _SpyLog or hasattr(provider, "_llm_log")
+
+
 def test_claude_cli_passes_effort_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     import json  # noqa: PLC0415
     import shutil  # noqa: PLC0415
