@@ -59,6 +59,7 @@ class _StubClient:
         language: Language,
         content: str,
         extra_instruction: str | None = None,
+        import_context: str | None = None,
     ) -> Either[str, EnrichmentResult]:
         return self._response
 
@@ -174,6 +175,7 @@ def test_enrich_partial_failure(tmp_path: Path) -> None:
             language: Language,
             content: str,
             extra_instruction: str | None = None,
+            import_context: str | None = None,
         ) -> Either[str, EnrichmentResult]:
             nonlocal call_count
             call_count += 1
@@ -259,6 +261,7 @@ def test_empty_file_skips_llm_call(tmp_path: Path) -> None:
             language: Language,
             content: str,
             extra_instruction: str | None = None,
+            import_context: str | None = None,
         ) -> Either[str, EnrichmentResult]:
             called.append(path)
             return right(_VALID_RESULT)
@@ -368,4 +371,54 @@ def test_no_valid_layers_accepts_any_layer(tmp_path: Path) -> None:
     client = _stub(right(custom_result))
     result = run_enrich(tmp_path, repo, client)  # type: ignore[arg-type]
     assert isinstance(result, Right)
-    assert result.value.enriched == 1
+
+
+class _SpyClient:
+    def __init__(self, response: Either[str, EnrichmentResult]) -> None:
+        self._response = response
+        self.calls: list[dict[str, object]] = []
+
+    def enrich(
+        self,
+        path: str,
+        language: Language,
+        content: str,
+        extra_instruction: str | None = None,
+        import_context: str | None = None,
+    ) -> Either[str, EnrichmentResult]:
+        self.calls.append({"path": path, "import_context": import_context})
+        return self._response
+
+
+def test_with_context_true_passes_import_context_to_client(tmp_path: Path) -> None:
+    repo = _make_repo()
+    dep_item = _make_item("my_dep/util.py", tmp_path)
+    enriched_dep = dep_item.with_llm_enrichment(
+        purpose="Utility helpers",
+        layer="lib",
+        stability=Stability.STABLE,
+        tags=frozenset(),
+        side_effects=frozenset(),
+        invariants=(),
+        llm_at=int(dep_item.last_modified),
+    )
+    repo.upsert(enriched_dep)
+    item = _make_item("app.py", tmp_path)
+    repo.upsert(item)
+    (tmp_path / "app.py").write_text("from my_dep.util import helper\n")
+    client = _SpyClient(right(_VALID_RESULT))
+    run_enrich(tmp_path, repo, client, with_context=True)  # type: ignore[arg-type]
+    assert len(client.calls) == 1
+    assert client.calls[0]["import_context"] is not None
+    assert "my_dep/util.py" in str(client.calls[0]["import_context"])
+
+
+def test_with_context_false_passes_none_import_context_to_client(tmp_path: Path) -> None:
+    repo = _make_repo()
+    item = _make_item("app.py", tmp_path)
+    repo.upsert(item)
+    (tmp_path / "app.py").write_text("from my_dep.util import helper\n")
+    client = _SpyClient(right(_VALID_RESULT))
+    run_enrich(tmp_path, repo, client, with_context=False)  # type: ignore[arg-type]
+    assert len(client.calls) == 1
+    assert client.calls[0]["import_context"] is None

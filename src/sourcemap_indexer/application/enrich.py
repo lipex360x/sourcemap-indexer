@@ -6,11 +6,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from sourcemap_indexer.application.import_context import resolve_import_context
 from sourcemap_indexer.domain.entities import Item
 from sourcemap_indexer.domain.repository import ItemRepository
 from sourcemap_indexer.domain.value_objects import Language, Layer, Stability
 from sourcemap_indexer.infra.llm_client import EnrichmentResult
 from sourcemap_indexer.lib.either import Either, Left, left, right
+
+_CONTEXT_MAX_CHARS = 2000
 
 
 class _EnrichClient(Protocol):
@@ -20,6 +23,7 @@ class _EnrichClient(Protocol):
         language: Language,
         content: str,
         extra_instruction: str | None = None,
+        import_context: str | None = None,
     ) -> Either[str, EnrichmentResult]: ...
 
 
@@ -65,9 +69,12 @@ def _handle_normal_file(
     repository: ItemRepository,
     valid_layers: frozenset[str] | None,
     extra_instruction: str | None,
+    import_context: str | None,
     now: int,
 ) -> Either[str, None]:
-    enrich_result = client.enrich(item.path, item.language, content, extra_instruction)
+    enrich_result = client.enrich(
+        item.path, item.language, content, extra_instruction, import_context
+    )
     if isinstance(enrich_result, Left):
         return left(f"{enrich_result.error}: {item.path}")
     result_data = enrich_result.value
@@ -96,6 +103,7 @@ def _enrich_item(
     valid_layers: frozenset[str] | None,
     extra_instruction: str | None,
     now: int,
+    with_context: bool = False,
 ) -> Either[str, None]:
     try:
         content = (root / item.path).read_text(encoding="utf-8", errors="replace")
@@ -103,8 +111,13 @@ def _enrich_item(
         return left(f"read-error: {item.path}")
     if item.size_bytes == 0:
         return _handle_empty_file(item, repository, now)
+    import_context = (
+        resolve_import_context(item, content, repository, _CONTEXT_MAX_CHARS)
+        if with_context
+        else None
+    )
     return _handle_normal_file(
-        item, content, client, repository, valid_layers, extra_instruction, now
+        item, content, client, repository, valid_layers, extra_instruction, import_context, now
     )
 
 
@@ -120,6 +133,7 @@ def run_enrich(
     extra_instruction: str | None = None,
     path_filter: str | None = None,
     valid_layers: frozenset[str] | None = None,
+    with_context: bool = False,
 ) -> Either[str, EnrichReport]:
     items_result = repository.find_needs_llm(
         limit=batch_limit,
@@ -136,7 +150,9 @@ def run_enrich(
     errors: list[str] = []
     now = int(time.time())
     for done, item in enumerate(pending, start=1):
-        result = _enrich_item(item, root, client, repository, valid_layers, extra_instruction, now)
+        result = _enrich_item(
+            item, root, client, repository, valid_layers, extra_instruction, now, with_context
+        )
         if isinstance(result, Left):
             failed += 1
             errors.append(result.error)

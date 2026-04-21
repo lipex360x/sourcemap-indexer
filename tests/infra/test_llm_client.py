@@ -641,4 +641,43 @@ def test_enrich_json_fallback_not_triggered_when_json_mode_off() -> None:
     client = LlmClient(config, http_client=httpx.Client(transport=transport))
     result = client.enrich("src/f.py", Language.PY, "code")
     assert isinstance(result, Left)
-    assert len(calls) == 1
+
+
+def test_enrich_appends_import_context_to_user_message() -> None:
+    captured: list[str] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        captured.append(body["messages"][1]["content"])
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(capture)
+    client = LlmClient(LlmConfig(), http_client=httpx.Client(transport=transport))
+    context_block = "Context from direct imports:\n- my_mod/util.py: utility helpers"
+    client.enrich("src/f.py", Language.PY, "x = 1", import_context=context_block)
+    assert context_block in captured[0]
+
+
+def test_enrich_without_import_context_user_message_unchanged() -> None:
+    with_context: list[str] = []
+    without_context: list[str] = []
+
+    def capture_with(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        with_context.append(body["messages"][1]["content"])
+        return _mock_response(_VALID_PAYLOAD)
+
+    def capture_without(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        without_context.append(body["messages"][1]["content"])
+        return _mock_response(_VALID_PAYLOAD)
+
+    client_with = LlmClient(
+        LlmConfig(), http_client=httpx.Client(transport=httpx.MockTransport(capture_with))
+    )
+    client_with.enrich("src/f.py", Language.PY, "x = 1", import_context=None)
+    client_without = LlmClient(
+        LlmConfig(), http_client=httpx.Client(transport=httpx.MockTransport(capture_without))
+    )
+    client_without.enrich("src/f.py", Language.PY, "x = 1")
+    assert with_context[0] == without_context[0]

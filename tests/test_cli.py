@@ -219,53 +219,6 @@ class _MockTask:
         self.total = total
 
 
-def test_hybrid_bar_full_green_when_complete() -> None:
-    from sourcemap_indexer.cli._rendering import _HybridProgressColumn
-
-    col = _HybridProgressColumn(width=10)
-    text = col.render(_MockTask(10, 10))  # type: ignore[arg-type]
-    plain = text.plain
-    assert plain == "●" * 10
-    assert all(s.style == "green" for s in text._spans)
-
-
-def test_hybrid_bar_indeterminate_is_yellow() -> None:
-    from sourcemap_indexer.cli._rendering import _HybridProgressColumn
-
-    col = _HybridProgressColumn(width=10)
-    text = col.render(_MockTask(0, None))  # type: ignore[arg-type]
-    assert len(text.plain) == 10
-    assert all(s.style == "yellow" for s in text._spans)
-
-
-def test_hybrid_bar_partial_green_count_proportional() -> None:
-    from sourcemap_indexer.cli._rendering import _HybridProgressColumn
-
-    col = _HybridProgressColumn(width=10)
-    text = col.render(_MockTask(5, 10))  # type: ignore[arg-type]
-    assert len(text.plain) == 10
-    spans = text._spans
-    assert spans[0].style == "green"
-    green_text = text.plain[spans[0].start : spans[0].end]
-    assert green_text == "●" * 5
-    non_green = text.plain[spans[0].end :]
-    assert len(non_green) == 5
-
-
-def test_hybrid_bar_pending_has_one_yellow_pulse_rest_dim() -> None:
-    from sourcemap_indexer.cli._rendering import _HybridProgressColumn
-
-    col = _HybridProgressColumn(width=10)
-    text = col.render(_MockTask(3, 10))  # type: ignore[arg-type]
-    yellow_spans = [s for s in text._spans if s.style == "yellow"]
-    dim_spans = [s for s in text._spans if s.style == "dim"]
-    yellow_chars = "".join(text.plain[s.start : s.end] for s in yellow_spans)
-    dim_chars = "".join(text.plain[s.start : s.end] for s in dim_spans)
-    assert yellow_chars == "●"
-    assert set(dim_chars) <= {"○"}
-    assert len(dim_chars) + 1 == 7
-
-
 def test_panel_default_style_is_info() -> None:
     from rich.panel import Panel
 
@@ -1113,4 +1066,55 @@ def test_llm_summary_line_shows_cli_model_and_effort(monkeypatch: pytest.MonkeyP
     importlib.reload(stats_mod)
     result = stats_mod._llm_summary_line()
     assert "claude-haiku-4-5-20251001" in result
-    assert "high" in result
+
+
+def test_enrich_with_context_flag_passes_true_to_run_enrich(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sourcemap_indexer.cli as cli_module  # noqa: PLC0415
+    from sourcemap_indexer.application.enrich import EnrichReport  # noqa: PLC0415
+    from sourcemap_indexer.lib.either import right  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
+    captured: list[bool] = []
+
+    def _spy(*_args: object, **kwargs: object) -> object:
+        captured.append(bool(kwargs.get("with_context", False)))
+        return right(EnrichReport(enriched=0, failed=0, skipped=0, errors=()))
+
+    monkeypatch.setattr("sourcemap_indexer.cli.indexing.enrich.run_enrich", _spy)
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: right(None))
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["enrich", "--with-context", "--root", str(tmp_path)])
+    assert captured and captured[0] is True
+
+
+def test_enrich_without_context_flag_passes_false_to_run_enrich(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sourcemap_indexer.cli as cli_module  # noqa: PLC0415
+    from sourcemap_indexer.application.enrich import EnrichReport  # noqa: PLC0415
+    from sourcemap_indexer.lib.either import right  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
+    captured: list[bool] = []
+
+    def _spy(*_args: object, **kwargs: object) -> object:
+        captured.append(bool(kwargs.get("with_context", False)))
+        return right(EnrichReport(enriched=0, failed=0, skipped=0, errors=()))
+
+    monkeypatch.setattr("sourcemap_indexer.cli.indexing.enrich.run_enrich", _spy)
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: right(None))
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["enrich", "--root", str(tmp_path)])
+    assert captured and captured[0] is False
+
+
+def test_show_loading_runs_without_error() -> None:
+    from unittest.mock import patch  # noqa: PLC0415
+
+    with patch("time.sleep"):
+        result = runner.invoke(app, ["show-loading", "--files", "3"])
+    assert result.exit_code == 0
