@@ -310,6 +310,8 @@ Context from direct imports:
 - src/infra/payment.py: handles Stripe API calls
 ```
 
+Pending files are automatically sorted by their dependency graph (topological order) before enrichment — leaf files are processed first. This means `--with-context` produces non-empty context blocks in a **single pass**, even on a fresh index.
+
 Constraints: depth 1 only (no transitive traversal); context is capped at 2000 characters — imports beyond the budget are dropped silently; unknown languages and imports not yet indexed produce no context (silent degradation).
 
 ### Exploration

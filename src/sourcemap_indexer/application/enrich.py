@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,10 +11,79 @@ from sourcemap_indexer.application.import_context import resolve_import_context
 from sourcemap_indexer.domain.entities import Item
 from sourcemap_indexer.domain.repository import ItemRepository
 from sourcemap_indexer.domain.value_objects import Language, Layer, Stability
+from sourcemap_indexer.infra.import_extractor import _EXTRACTORS
 from sourcemap_indexer.infra.llm_client import EnrichmentResult
 from sourcemap_indexer.lib.either import Either, Left, left, right
 
 _CONTEXT_MAX_CHARS = 2000
+
+
+def _item_deps(
+    item: Item,
+    extractors: dict[Language, Callable[[str, str], list[str]]],
+    pending_paths: set[str],
+    root: Path,
+) -> list[str]:
+    extractor = extractors.get(item.language)
+    if extractor is None:
+        return []
+    try:
+        content = (root / item.path).read_text(encoding="utf-8", errors="replace")
+        paths = extractor(content, item.path)
+    except (OSError, SyntaxError):
+        return []
+    return [dep for dep in paths if dep in pending_paths]
+
+
+def _build_dep_graph(
+    items: list[Item],
+    extractors: dict[Language, Callable[[str, str], list[str]]],
+    root: Path,
+) -> tuple[dict[str, int], dict[str, list[str]]]:
+    pending_paths = {item.path for item in items}
+    in_degree: dict[str, int] = {item.path: 0 for item in items}
+    dependents: dict[str, list[str]] = {item.path: [] for item in items}
+    for item in items:
+        for dep_path in _item_deps(item, extractors, pending_paths, root):
+            in_degree[item.path] += 1
+            dependents[dep_path].append(item.path)
+    return in_degree, dependents
+
+
+def _kahn_bfs(
+    items: list[Item],
+    path_to_item: dict[str, Item],
+    in_degree: dict[str, int],
+    dependents: dict[str, list[str]],
+) -> tuple[list[Item], set[str]]:
+    queue = deque(item.path for item in items if in_degree[item.path] == 0)
+    result: list[Item] = []
+    seen: set[str] = set()
+    while queue:
+        path = queue.popleft()
+        result.append(path_to_item[path])
+        seen.add(path)
+        for dependent_path in dependents[path]:
+            in_degree[dependent_path] -= 1
+            if in_degree[dependent_path] == 0:
+                queue.append(dependent_path)
+    return result, seen
+
+
+def _topologically_ordered(
+    items: list[Item],
+    extractors: dict[Language, Callable[[str, str], list[str]]],
+    root: Path,
+) -> list[Item]:
+    if not items:
+        return []
+    path_to_item = {item.path: item for item in items}
+    in_degree, dependents = _build_dep_graph(items, extractors, root)
+    result, seen = _kahn_bfs(items, path_to_item, in_degree, dependents)
+    for item in items:
+        if item.path not in seen:
+            result.append(item)
+    return result
 
 
 class _EnrichClient(Protocol):
@@ -144,7 +214,7 @@ def run_enrich(
     )
     if isinstance(items_result, Left):
         return items_result
-    pending = items_result.value
+    pending = _topologically_ordered(items_result.value, _EXTRACTORS, root)
     total_items = len(pending)
     enriched = failed = 0
     errors: list[str] = []

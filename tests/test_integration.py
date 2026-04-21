@@ -281,3 +281,87 @@ def test_with_context_false_no_context_in_prompt(tmp_path: Path) -> None:
 
     run_enrich(tmp_path, repo, _SpyClient(), with_context=False)  # type: ignore[arg-type]
     assert captured_contexts[0] is None
+
+
+def test_topo_order_single_pass_context(tmp_path: Path) -> None:
+    import time  # noqa: PLC0415
+
+    from sourcemap_indexer.application.enrich import run_enrich  # noqa: PLC0415
+    from sourcemap_indexer.domain.entities import Item  # noqa: PLC0415
+    from sourcemap_indexer.domain.value_objects import (  # noqa: PLC0415
+        ContentHash,
+        ItemId,
+        Language,
+        Stability,
+    )
+    from sourcemap_indexer.infra.llm_client import EnrichmentResult  # noqa: PLC0415
+    from sourcemap_indexer.infra.migrator import init_db  # noqa: PLC0415
+    from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository  # noqa: PLC0415
+    from sourcemap_indexer.lib.either import Either, Right  # noqa: PLC0415
+
+    db_result = init_db(Path(":memory:"))
+    assert isinstance(db_result, Right)
+    repo = SqliteItemRepository(db_result.value)
+
+    now = int(time.time())
+
+    leaf_path = "utils/helper.py"
+    dependent_path = "app.py"
+
+    (tmp_path / "utils").mkdir()
+    (tmp_path / leaf_path).write_text("def helper(): pass\n")
+    (tmp_path / dependent_path).write_text("from utils.helper import helper\n")
+
+    def _make_pending(path: str, size: int) -> Item:
+        return Item(
+            id=ItemId.generate(),
+            path=path,
+            name=path.split("/")[-1],
+            language=Language.PY,
+            lines=1,
+            size_bytes=size,
+            content_hash=ContentHash("f" * 64),
+            last_modified=now,
+            needs_llm=True,
+            created_at=now,
+            updated_at=now,
+        )
+
+    dependent_item = _make_pending(dependent_path, 38)
+    leaf_item = _make_pending(leaf_path, 25)
+    repo.upsert(dependent_item)
+    repo.upsert(leaf_item)
+
+    call_order: list[str] = []
+    captured_for_dependent: list[str | None] = []
+
+    class _SpyClient:
+        def enrich(
+            self,
+            path: str,
+            language: Language,
+            content: str,
+            extra_instruction: str | None = None,
+            import_context: str | None = None,
+        ) -> Either[str, EnrichmentResult]:
+            call_order.append(path)
+            if path == dependent_path:
+                captured_for_dependent.append(import_context)
+            return Right(
+                EnrichmentResult(
+                    purpose="Leaf utility" if path == leaf_path else "Application entry",
+                    tags=frozenset(),
+                    layer="lib" if path == leaf_path else "application",
+                    stability=Stability.STABLE,
+                    side_effects=frozenset(),
+                    invariants=(),
+                )
+            )
+
+    run_enrich(tmp_path, repo, _SpyClient(), with_context=True)  # type: ignore[arg-type]
+
+    assert call_order.index(leaf_path) < call_order.index(dependent_path)
+    assert len(captured_for_dependent) == 1
+    assert captured_for_dependent[0] is not None
+    assert "utils/helper.py" in captured_for_dependent[0]
+    assert "Leaf utility" in captured_for_dependent[0]
