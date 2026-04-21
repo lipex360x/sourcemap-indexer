@@ -4,6 +4,7 @@ import json
 import shutil
 import subprocess
 
+from sourcemap_indexer.config import llm_cli_model
 from sourcemap_indexer.domain.value_objects import Language
 from sourcemap_indexer.infra.llm_client import EnrichmentResult, _parse_enrichment
 from sourcemap_indexer.lib.either import Either, left
@@ -27,6 +28,14 @@ def _build_prompt(
     return prompt
 
 
+def _build_cmd(prompt: str) -> list[str]:
+    model = llm_cli_model()
+    cmd = ["claude", "-p", prompt, "--output-format", "json"]
+    if model:
+        cmd += ["--model", model]
+    return cmd
+
+
 class ClaudeCliProvider:
     def enrich(
         self,
@@ -44,7 +53,7 @@ class ClaudeCliProvider:
         prompt = _build_prompt(path, language, content, extra_instruction)
         try:
             proc = subprocess.run(
-                ["claude", "-p", prompt, "--output-format", "json"],
+                _build_cmd(prompt),
                 capture_output=True,
                 text=True,
                 check=True,

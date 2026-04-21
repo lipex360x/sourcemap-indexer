@@ -55,3 +55,7 @@ def default_prompt_export_path(root: Path) -> Path:
 
 def llm_provider_name() -> str:
     return os.environ.get("SOURCEMAP_LLM_PROVIDER", "http")
+
+
+def llm_cli_model() -> str | None:
+    return os.environ.get("SOURCEMAP_LLM_CLI_MODEL") or None
