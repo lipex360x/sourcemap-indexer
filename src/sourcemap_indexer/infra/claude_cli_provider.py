@@ -25,12 +25,18 @@ def _check_auth() -> None:
 
 
 def _build_prompt(
-    path: str, language: Language, content: str, extra_instruction: str | None
+    path: str,
+    language: Language,
+    content: str,
+    extra_instruction: str | None,
+    import_context: str | None = None,
 ) -> str:
     lang_str = str(language)
     prompt = f"Path: {path}\nLanguage: {language}\n\n```{lang_str}\n{content}\n```"
     if extra_instruction:
         prompt += f"\n\nAdditional instruction: {extra_instruction}"
+    if import_context:
+        prompt += f"\n\n{import_context}"
     return prompt
 
 
@@ -81,6 +87,7 @@ class ClaudeCliProvider:
         language: Language,
         content: str,
         extra_instruction: str | None = None,
+        import_context: str | None = None,
     ) -> Either[str, EnrichmentResult]:
         if not shutil.which("claude"):
             return left("claude-cli-not-configured")
@@ -88,7 +95,7 @@ class ClaudeCliProvider:
             _check_auth()
         except subprocess.CalledProcessError:
             return left("claude-cli-auth-error")
-        prompt = _build_prompt(path, language, content, extra_instruction)
+        prompt = _build_prompt(path, language, content, extra_instruction, import_context)
         try:
             proc = subprocess.run(
                 _build_cmd(prompt, self._system_prompt),

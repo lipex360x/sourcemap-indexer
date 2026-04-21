@@ -1,0 +1,159 @@
+project: sourcemap-indexer
+description: Codebase indexer — walks source files into SQLite and enriches file metadata via LLM.
+
+layers:
+  cli:
+    description: Typer CLI entry point. Orchestrates commands and renders output.
+    path: src/sourcemap_indexer/cli/
+    commands:
+      - name: init
+        file: cli/indexing/init.py
+        description: Initialise project index directory (.sourcemap/).
+      - name: walk
+        file: cli/indexing/walk.py
+        description: Walk the project tree and upsert file records into SQLite.
+      - name: sync
+        file: cli/indexing/sync.py
+        description: Reconcile index.yaml with SQLite.
+      - name: enrich
+        file: cli/indexing/enrich.py
+        description: |
+          Send pending files to the LLM for metadata enrichment.
+          Flags: --limit, --force, --file, --layer, --language, -m, --with-context,
+                 --export-llm-prompt, --output.
+          --with-context injects depth-1 import context from indexed dependencies
+          into the LLM prompt (Python only, off by default).
+      - name: stats / brief / search / analysis / profile
+        file: cli/insights/
+        description: Read-only insight commands over the indexed data.
+
+  application:
+    description: Orchestration layer. Coordinates domain entities, infra, and I/O.
+    path: src/sourcemap_indexer/application/
+    modules:
+      - name: walk
+        file: application/walk.py
+        description: Walk the filesystem and produce index.yaml.
+      - name: sync
+        file: application/sync.py
+        description: Reconcile index.yaml with the SQLite repository.
+      - name: enrich
+        file: application/enrich.py
+        description: |
+          run_enrich() enriches pending files via an LLM client.
+          Accepts with_context: bool — when True, calls resolve_import_context()
+          and passes the result as import_context to client.enrich().
+      - name: import_context
+        file: application/import_context.py
+        description: |
+          resolve_import_context(item, content, repo, max_chars) -> str
+          Extracts direct imports from file content via _EXTRACTORS, looks up their
+          purpose from the SQLite index, and returns a formatted context block capped
+          at max_chars. Returns "" for unknown languages or when no enriched imports
+          are found. Silent degradation — never raises.
+
+  infra:
+    description: I/O layer. SQLite, filesystem, LLM clients, and extractors.
+    path: src/sourcemap_indexer/infra/
+    modules:
+      - name: sqlite_repo
+        file: infra/sqlite_repo.py
+        description: SqliteItemRepository — persists Item entities to SQLite.
+      - name: llm_client
+        file: infra/llm_client.py
+        description: |
+          HttpLLMProvider (LlmClient) — enriches files via an OpenAI-compatible HTTP API.
+          enrich(path, language, content, extra_instruction, import_context) -> Either[str, EnrichmentResult]
+          Appends import_context to the user prompt when provided.
+      - name: claude_cli_provider
+        file: infra/claude_cli_provider.py
+        description: |
+          ClaudeCliProvider — enriches files via the claude CLI subprocess.
+          enrich(path, language, content, extra_instruction, import_context) -> Either[str, EnrichmentResult]
+          import_context is merged into the prompt via _build_prompt().
+      - name: llm_provider
+        file: infra/llm_provider.py
+        description: |
+          LLMProvider protocol — structural interface for enrichment providers.
+          enrich(path, language, content, extra_instruction, import_context) -> Either[str, EnrichmentResult]
+          resolve_provider(name) -> Either[str, factory_callable]
+      - name: import_extractor
+        file: infra/import_extractor.py
+        description: |
+          ImportExtractor protocol: extract(content, file_path) -> list[str]
+          Returns project-relative paths for direct imports.
+          PythonImportExtractor: resolves import a.b.c and from a.b import c to
+          project-relative paths; filters stdlib (sys.stdlib_module_names) and
+          external packages (site-packages check via importlib.util.find_spec);
+          skips relative imports; handles SyntaxError gracefully.
+          _EXTRACTORS: dict[Language, Callable[[str, str], list[str]]] — registry
+          mapping Language.PY to PythonImportExtractor().extract. Unknown languages
+          are absent from the registry (caller handles gracefully).
+      - name: walker
+        file: infra/walker.py
+        description: Filesystem walker. Respects .sourcemapignore patterns.
+      - name: migrator
+        file: infra/migrator.py
+        description: Applies SQLite schema migrations.
+
+  domain:
+    description: Pure entities and value objects. No I/O dependencies.
+    path: src/sourcemap_indexer/domain/
+    modules:
+      - name: entities
+        file: domain/entities.py
+        description: Item dataclass — the central entity representing an indexed file.
+      - name: value_objects
+        file: domain/value_objects.py
+        description: Language, Layer, Stability, SideEffect, ContentHash, ItemId.
+      - name: repository
+        file: domain/repository.py
+        description: ItemRepository protocol — defines the persistence interface.
+
+  lib:
+    description: Shared utilities. No domain or infra imports.
+    path: src/sourcemap_indexer/lib/
+    modules:
+      - name: either
+        file: lib/either.py
+        description: Either[L, R] monad — Left (failure) and Right (success).
+      - name: log
+        file: lib/log.py
+        description: create_logger() — structured logger factory.
+      - name: llm_log
+        file: lib/llm_log.py
+        description: LlmLog — records LLM request/response pairs to timestamped files.
+
+data:
+  sqlite:
+    description: SQLite database at .sourcemap/index.db. Single source of truth for indexed file metadata.
+    tables:
+      - items: path, language, lines, size_bytes, content_hash, last_modified, purpose, layer, stability, tags, side_effects, invariants, needs_llm, llm_hash, llm_at, deleted_at, created_at, updated_at
+
+key_flows:
+  walk:
+    description: |
+      CLI walk -> repo.load_known_files() (SELECT from SQLite)
+               -> run_walk(root, output, known_files)
+                    -> walk_project(root, known_files) [fast-path: skip read_bytes if mtime+size match]
+                    -> writes index.yaml
+               -> run_sync(index.yaml, repo) [reconciles SQLite]
+
+  enrich:
+    description: |
+      CLI enrich -> resolve_provider() -> LLMProvider
+                 -> run_enrich(root, repo, client, ..., with_context=False|True)
+                      -> for each pending item:
+                           content = read file
+                           if with_context: import_context = resolve_import_context(item, content, repo, 2000)
+                           client.enrich(path, language, content, extra_instruction, import_context)
+                           repo.upsert(enriched_item)
+
+  enrich_with_context:
+    description: |
+      resolve_import_context(item, content, repo, max_chars)
+        -> _EXTRACTORS.get(item.language) -> extract(content, file_path) -> [paths]
+        -> for each path: repo.find_by_path(path) -> item with purpose
+        -> format "Context from direct imports:\n- path: purpose\n..."
+        -> cap at max_chars by dropping whole lines (never truncate mid-line)
+        -> return "" if no enriched imports found or language not in _EXTRACTORS

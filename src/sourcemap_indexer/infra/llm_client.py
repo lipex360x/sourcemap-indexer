@@ -252,6 +252,7 @@ class LlmClient:
         language: Language,
         content: str,
         extra_instruction: str | None = None,
+        import_context: str | None = None,
     ) -> Either[str, EnrichmentResult]:
         content = _truncate(content, self._config.max_chars)
         system = self._system_prompt
@@ -259,6 +260,8 @@ class LlmClient:
             system = system + f"\n\nAdditional instruction: {extra_instruction}"
         lang_str = str(language)
         user_prompt = f"Path: {path}\nLanguage: {language}\n\n```{lang_str}\n{content}\n```"
+        if import_context:
+            user_prompt = user_prompt + f"\n\n{import_context}"
         messages: list[dict[str, str]] = [
             {"role": "system", "content": system},
             {"role": "user", "content": user_prompt},

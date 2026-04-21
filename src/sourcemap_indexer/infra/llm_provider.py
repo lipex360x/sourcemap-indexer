@@ -15,6 +15,7 @@ class LLMProvider(Protocol):
         language: Language,
         content: str,
         extra_instruction: str | None = None,
+        import_context: str | None = None,
     ) -> Either[str, EnrichmentResult]: ...
 
 

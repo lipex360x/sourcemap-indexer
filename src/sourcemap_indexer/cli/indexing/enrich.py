@@ -233,6 +233,7 @@ def _run_enrich_session(
     prog: Progress,
     task_scan: TaskID,
     task_enrich: TaskID,
+    with_context: bool = False,
 ) -> Either[str, tuple[EnrichReport, SyncReport | None, float]]:
     walk_result = run_walk(project_root, index_path, known_files=repo.load_known_files())
     if isinstance(walk_result, Left):
@@ -261,6 +262,7 @@ def _run_enrich_session(
         extra_instruction=message,
         path_filter=file,
         valid_layers=valid_layers,
+        with_context=with_context,
     )
     elapsed = time.perf_counter() - started
     if isinstance(enrich_result, Left):
@@ -282,6 +284,11 @@ def enrich(
     ),
     output: str | None = typer.Option(
         None, "--output", help="Destination for --export-llm-prompt (default: maps dir)"
+    ),
+    with_context: bool = typer.Option(
+        False,
+        "--with-context",
+        help="Inject depth-1 import context from indexed dependencies into the prompt",
     ),
 ) -> None:
     project_root = _resolve_root(root)
@@ -336,6 +343,7 @@ def enrich(
             prog,
             task_scan,
             task_enrich,
+            with_context,
         )
         if isinstance(session_result, Left):
             typer.echo(f"Error: {session_result.error}", err=True)
