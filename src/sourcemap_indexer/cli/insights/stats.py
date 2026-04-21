@@ -19,7 +19,12 @@ from sourcemap_indexer.cli._rendering import (
     _proportional_width,
 )
 from sourcemap_indexer.cli._shared import _open_repo, _resolve_root, app
-from sourcemap_indexer.config import index_yaml_path
+from sourcemap_indexer.config import (
+    index_yaml_path,
+    llm_cli_effort,
+    llm_cli_model,
+    llm_provider_name,
+)
 from sourcemap_indexer.domain.entities import Item
 from sourcemap_indexer.infra.dotenv import load_dotenv
 from sourcemap_indexer.infra.llm_client import from_environ, is_llm_configured
@@ -55,6 +60,12 @@ def _compute_pct(enriched: int, total: int) -> int:
 
 
 def _llm_summary_line() -> str:
+    provider = llm_provider_name()
+    if provider != "http":
+        model = llm_cli_model() or "default"
+        effort = llm_cli_effort()
+        effort_str = f"  [dim]effort: {effort}[/dim]" if effort else ""
+        return f"[bold]LLM[/bold]    {provider}  [dim]({model})[/dim]{effort_str}"
     if is_llm_configured():
         llm = from_environ()
         return f"[bold]LLM[/bold]    {llm.model}  [dim]({llm.url})[/dim]"

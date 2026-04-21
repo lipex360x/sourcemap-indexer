@@ -27,6 +27,8 @@ from sourcemap_indexer.config import (
     default_prompt_export_path,
     import_prompt_path,
     index_yaml_path,
+    llm_cli_effort,
+    llm_cli_model,
     llm_provider_name,
     logs_dir,
     maps_dir,
@@ -157,17 +159,32 @@ def _build_filters(
     )
 
 
+def _build_provider_lines(
+    config: LlmConfig | None,
+    provider_name: str,
+    cli_model: str | None,
+    cli_effort: str | None,
+) -> list[str]:
+    if config is not None:
+        connected = "  [green]●[/green] connected"
+        return [f"[bold]Model[/bold]  {config.model}  [dim]({config.url})[/dim]{connected}"]
+    parts = [f"[bold]Provider[/bold]  {provider_name}"]
+    if cli_model:
+        parts.append(f"[bold]Model[/bold]  {cli_model}")
+    if cli_effort:
+        parts.append(f"[bold]Effort[/bold]  {cli_effort}")
+    return parts
+
+
 def _build_enrich_header(
     config: LlmConfig | None,
     import_path: Path | None,
     message: str | None,
     provider_name: str = "http",
+    cli_model: str | None = None,
+    cli_effort: str | None = None,
 ) -> str:
-    if config is not None:
-        connected = "  [green]●[/green] connected"
-        parts = [f"[bold]Model[/bold]  {config.model}  [dim]({config.url})[/dim]{connected}"]
-    else:
-        parts = [f"[bold]Provider[/bold]  {provider_name}"]
+    parts = _build_provider_lines(config, provider_name, cli_model, cli_effort)
     if import_path is not None:
         parts.append(f"[bold]Prompt[/bold]  {import_path}")
     if message:
@@ -279,7 +296,14 @@ def enrich(
     client, config = _create_provider(project_root, provider_name, custom_prompt, valid_layers)
     repo = _open_repo(project_root)
     layer_val, language_val, force = _build_filters(layer, language, file, force)
-    header = _build_enrich_header(config, import_path, message, provider_name)
+    header = _build_enrich_header(
+        config,
+        import_path,
+        message,
+        provider_name,
+        cli_model=llm_cli_model() if provider_name != "http" else None,
+        cli_effort=llm_cli_effort() if provider_name != "http" else None,
+    )
     index_path = index_yaml_path(project_root)
     prog = Progress(
         SpinnerColumn(finished_text="[green]✓[/green]"),
