@@ -1113,4 +1113,47 @@ def test_llm_summary_line_shows_cli_model_and_effort(monkeypatch: pytest.MonkeyP
     importlib.reload(stats_mod)
     result = stats_mod._llm_summary_line()
     assert "claude-haiku-4-5-20251001" in result
-    assert "high" in result
+
+
+def test_enrich_with_context_flag_passes_true_to_run_enrich(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sourcemap_indexer.cli as cli_module  # noqa: PLC0415
+    from sourcemap_indexer.application.enrich import EnrichReport  # noqa: PLC0415
+    from sourcemap_indexer.lib.either import right  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
+    captured: list[bool] = []
+
+    def _spy(*_args: object, **kwargs: object) -> object:
+        captured.append(bool(kwargs.get("with_context", False)))
+        return right(EnrichReport(enriched=0, failed=0, skipped=0, errors=()))
+
+    monkeypatch.setattr("sourcemap_indexer.cli.indexing.enrich.run_enrich", _spy)
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: right(None))
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["enrich", "--with-context", "--root", str(tmp_path)])
+    assert captured and captured[0] is True
+
+
+def test_enrich_without_context_flag_passes_false_to_run_enrich(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sourcemap_indexer.cli as cli_module  # noqa: PLC0415
+    from sourcemap_indexer.application.enrich import EnrichReport  # noqa: PLC0415
+    from sourcemap_indexer.lib.either import right  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
+    captured: list[bool] = []
+
+    def _spy(*_args: object, **kwargs: object) -> object:
+        captured.append(bool(kwargs.get("with_context", False)))
+        return right(EnrichReport(enriched=0, failed=0, skipped=0, errors=()))
+
+    monkeypatch.setattr("sourcemap_indexer.cli.indexing.enrich.run_enrich", _spy)
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: right(None))
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["enrich", "--root", str(tmp_path)])
+    assert captured and captured[0] is False

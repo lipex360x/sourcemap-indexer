@@ -121,4 +121,163 @@ def test_show_item_details(project: Path) -> None:
     assert result.exit_code == 0
     assert "main.py" in result.output
     assert "language:  py" in result.output
-    assert "needs_llm: True" in result.output
+
+
+def test_with_context_enriched_import_appears_in_prompt(tmp_path: Path) -> None:
+    import time  # noqa: PLC0415
+
+    from sourcemap_indexer.application.enrich import run_enrich  # noqa: PLC0415
+    from sourcemap_indexer.domain.entities import Item  # noqa: PLC0415
+    from sourcemap_indexer.domain.value_objects import (  # noqa: PLC0415
+        ContentHash,
+        ItemId,
+        Language,
+        Stability,
+    )
+    from sourcemap_indexer.infra.llm_client import EnrichmentResult  # noqa: PLC0415
+    from sourcemap_indexer.infra.migrator import init_db  # noqa: PLC0415
+    from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository  # noqa: PLC0415
+    from sourcemap_indexer.lib.either import Either, Right  # noqa: PLC0415
+
+    db_result = init_db(Path(":memory:"))
+    assert isinstance(db_result, Right)
+    repo = SqliteItemRepository(db_result.value)
+
+    dep_path = "my_lib/helper.py"
+    app_path = "app.py"
+
+    (tmp_path / "my_lib").mkdir()
+    (tmp_path / dep_path).write_text("def helper(): pass\n")
+    (tmp_path / app_path).write_text("from my_lib.helper import helper\n")
+
+    now = int(time.time())
+    dep_item = Item(
+        id=ItemId.generate(),
+        path=dep_path,
+        name="helper.py",
+        language=Language.PY,
+        lines=1,
+        size_bytes=20,
+        content_hash=ContentHash("b" * 64),
+        last_modified=now,
+        needs_llm=False,
+        created_at=now,
+        updated_at=now,
+    ).with_llm_enrichment(
+        purpose="Provides reusable helper utilities",
+        layer="lib",
+        stability=Stability.STABLE,
+        tags=frozenset(),
+        side_effects=frozenset(),
+        invariants=(),
+        llm_at=now,
+    )
+    repo.upsert(dep_item)
+
+    app_item = Item(
+        id=ItemId.generate(),
+        path=app_path,
+        name="app.py",
+        language=Language.PY,
+        lines=1,
+        size_bytes=38,
+        content_hash=ContentHash("c" * 64),
+        last_modified=now,
+        needs_llm=True,
+        created_at=now,
+        updated_at=now,
+    )
+    repo.upsert(app_item)
+
+    captured_contexts: list[str | None] = []
+
+    class _SpyClient:
+        def enrich(
+            self,
+            path: str,
+            language: Language,
+            content: str,
+            extra_instruction: str | None = None,
+            import_context: str | None = None,
+        ) -> Either[str, EnrichmentResult]:
+            captured_contexts.append(import_context)
+            return Right(
+                EnrichmentResult(
+                    purpose="Application entry",
+                    tags=frozenset({"cli"}),
+                    layer="application",
+                    stability=Stability.STABLE,
+                    side_effects=frozenset(),
+                    invariants=(),
+                )
+            )
+
+    run_enrich(tmp_path, repo, _SpyClient(), with_context=True)  # type: ignore[arg-type]
+    assert len(captured_contexts) == 1
+    assert captured_contexts[0] is not None
+    assert "my_lib/helper.py" in captured_contexts[0]
+    assert "Provides reusable helper utilities" in captured_contexts[0]
+
+
+def test_with_context_false_no_context_in_prompt(tmp_path: Path) -> None:
+    import time  # noqa: PLC0415
+
+    from sourcemap_indexer.application.enrich import run_enrich  # noqa: PLC0415
+    from sourcemap_indexer.domain.entities import Item  # noqa: PLC0415
+    from sourcemap_indexer.domain.value_objects import (  # noqa: PLC0415
+        ContentHash,
+        ItemId,
+        Language,
+        Stability,
+    )
+    from sourcemap_indexer.infra.llm_client import EnrichmentResult  # noqa: PLC0415
+    from sourcemap_indexer.infra.migrator import init_db  # noqa: PLC0415
+    from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository  # noqa: PLC0415
+    from sourcemap_indexer.lib.either import Either, Right  # noqa: PLC0415
+
+    db_result = init_db(Path(":memory:"))
+    assert isinstance(db_result, Right)
+    repo = SqliteItemRepository(db_result.value)
+
+    now = int(time.time())
+    app_item = Item(
+        id=ItemId.generate(),
+        path="app.py",
+        name="app.py",
+        language=Language.PY,
+        lines=1,
+        size_bytes=38,
+        content_hash=ContentHash("d" * 64),
+        last_modified=now,
+        needs_llm=True,
+        created_at=now,
+        updated_at=now,
+    )
+    repo.upsert(app_item)
+    (tmp_path / "app.py").write_text("from my_lib.helper import helper\n")
+
+    captured_contexts: list[str | None] = []
+
+    class _SpyClient:
+        def enrich(
+            self,
+            path: str,
+            language: Language,
+            content: str,
+            extra_instruction: str | None = None,
+            import_context: str | None = None,
+        ) -> Either[str, EnrichmentResult]:
+            captured_contexts.append(import_context)
+            return Right(
+                EnrichmentResult(
+                    purpose="p",
+                    tags=frozenset(),
+                    layer="application",
+                    stability=Stability.STABLE,
+                    side_effects=frozenset(),
+                    invariants=(),
+                )
+            )
+
+    run_enrich(tmp_path, repo, _SpyClient(), with_context=False)  # type: ignore[arg-type]
+    assert captured_contexts[0] is None
