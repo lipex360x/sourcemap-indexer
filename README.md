@@ -634,11 +634,11 @@ Every commit passes a pre-commit pipeline that enforces the following gates:
 
 | Tool | What it checks | Config |
 |------|---------------|--------|
-| **ruff** | Style, imports, simplification (`SIM`), returns (`RET`), bugbear (`B`), upgrades (`UP`) | `pyproject.toml [tool.ruff.lint]` |
+| **ruff** | Style, imports, simplification (`SIM`), returns (`RET`), bugbear (`B`), upgrades (`UP`), security (`S`) | `pyproject.toml [tool.ruff.lint]` |
 | **ruff format** | Consistent formatting (replaces Black) | `pyproject.toml [tool.ruff]` |
 | **McCabe complexity** | No function exceeds cyclomatic complexity 5 (`C901`) | `pyproject.toml [tool.ruff.lint.mccabe]` |
 | **mypy** | Full strict type checking — no `Any`, no untyped functions | `pyproject.toml [tool.mypy]` |
-| **bandit** | Security scan for common vulnerabilities | `pyproject.toml [tool.bandit]` |
+| **bandit** | Deep security scan — severity/confidence filtering, broader rule set | `pyproject.toml [tool.bandit]` |
 | **vulture** | Dead code detection — unused functions and variables | — |
 | **pylint C0103** | Naming convention enforcement — no abbreviations (`msg`, `cfg`, `err`, …) | `pyproject.toml [tool.pylint]` |
 | **pytest + coverage** | Test suite must pass at ≥ 95% line coverage | `pyproject.toml [tool.pytest]` |
