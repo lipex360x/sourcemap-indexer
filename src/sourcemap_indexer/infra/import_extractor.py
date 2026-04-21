@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import posixpath
+import re
 import sys
 from collections.abc import Callable
+from pathlib import PurePosixPath
 from typing import Protocol
 
 from sourcemap_indexer.domain.value_objects import Language
@@ -72,6 +75,44 @@ class PythonImportExtractor:
         return self._gather(tree)
 
 
+_TS_IMPORT_RE = re.compile(
+    r"""(?:import\s+(?:type\s+)?(?:[\w*{][^'"]*\s+from\s+)?|require\s*\(\s*)['"]([^'"]+)['"]""",
+    re.MULTILINE,
+)
+
+_TS_CANDIDATE_EXTS = (".ts", ".tsx", ".js", ".jsx", "/index.ts", "/index.tsx")
+
+
+def _ts_candidates(base: str) -> list[str]:
+    return [base + ext for ext in _TS_CANDIDATE_EXTS]
+
+
+def _resolve_ts_specifier(specifier: str, file_path: str) -> list[str]:
+    if not (specifier.startswith("./") or specifier.startswith("../") or specifier.startswith("/")):
+        return []
+    raw = str(PurePosixPath(file_path).parent / specifier)
+    base = posixpath.normpath(raw)
+    return _ts_candidates(base)
+
+
+class TypeScriptImportExtractor:
+    def extract(self, content: str, file_path: str) -> list[str]:
+        seen: set[str] = set()
+        result: list[str] = []
+        for match in _TS_IMPORT_RE.finditer(content):
+            specifier = match.group(1)
+            for candidate in _resolve_ts_specifier(specifier, file_path):
+                if candidate not in seen:
+                    seen.add(candidate)
+                    result.append(candidate)
+        return result
+
+
+_ts_extractor = TypeScriptImportExtractor().extract
+
 _EXTRACTORS: dict[Language, Callable[[str, str], list[str]]] = {
     Language.PY: PythonImportExtractor().extract,
+    Language.TS: _ts_extractor,
+    Language.JS: _ts_extractor,
+    Language.TSX: _ts_extractor,
 }

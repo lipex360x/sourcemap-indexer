@@ -85,5 +85,3 @@ def test_extractors_registry_python_callable_works() -> None:
 
 def test_extractors_registry_unknown_language_absent() -> None:
     assert Language.OTHER not in _EXTRACTORS
-    assert Language.JS not in _EXTRACTORS
-    assert Language.TS not in _EXTRACTORS

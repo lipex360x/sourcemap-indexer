@@ -298,7 +298,7 @@ All commands are invoked as `sourcemap <command>`.
 | `--layer <layer>` | Filter by architectural layer |
 | `--language <lang>` | Filter by language |
 | `-m "<msg>"` | Inject an extra instruction into the LLM prompt |
-| `--with-context` | Inject depth-1 import context from indexed dependencies into the prompt (Python only; off by default) |
+| `--with-context` | Inject depth-1 import context from indexed dependencies into the prompt (Python, TypeScript, JavaScript, TSX; off by default) |
 | `--export-llm-prompt` | Write the active prompt to a `.md` file before running (defaults to `maps dir/prompt.md`) |
 | `--output <path>` | Destination `.md` file for `--export-llm-prompt` |
 
@@ -311,6 +311,8 @@ Context from direct imports:
 ```
 
 Pending files are automatically sorted by their dependency graph (topological order) before enrichment — leaf files are processed first. This means `--with-context` produces non-empty context blocks in a **single pass**, even on a fresh index.
+
+Supported languages: Python, TypeScript, JavaScript, TSX. For TS/JS/TSX, the extractor returns extension candidates (`.ts`, `.tsx`, `.js`, `.jsx`, `index.ts`, `index.tsx`) and the index disambiguates automatically. `export … from` re-exports and tsconfig path aliases are not resolved.
 
 Constraints: depth 1 only (no transitive traversal); context is capped at 2000 characters — imports beyond the budget are dropped silently; unknown languages and imports not yet indexed produce no context (silent degradation).
 
