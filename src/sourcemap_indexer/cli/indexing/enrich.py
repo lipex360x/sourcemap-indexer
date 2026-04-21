@@ -137,7 +137,8 @@ def _create_provider(
     if isinstance(result, Left):
         typer.echo(f"Error: unknown LLM provider '{provider_name}'", err=True)
         raise typer.Exit(1)
-    return (result.value(), None)
+    llm_log = create_llm_log(logs_dir(project_root))
+    return (result.value()(llm_log=llm_log), None)
 
 
 def _build_filters(

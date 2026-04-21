@@ -7,7 +7,8 @@ import subprocess
 from sourcemap_indexer.config import llm_cli_effort, llm_cli_model
 from sourcemap_indexer.domain.value_objects import Language
 from sourcemap_indexer.infra.llm_client import EnrichmentResult, _parse_enrichment
-from sourcemap_indexer.lib.either import Either, left
+from sourcemap_indexer.lib.either import Either, Left, left
+from sourcemap_indexer.lib.llm_log import LlmLog
 
 
 def _check_auth() -> None:
@@ -40,6 +41,21 @@ def _build_cmd(prompt: str) -> list[str]:
 
 
 class ClaudeCliProvider:
+    def __init__(self, llm_log: LlmLog | None = None) -> None:
+        self._llm_log = llm_log
+
+    def _log(self, path: str, language: Language, prompt: str, result: str, raw: str = "") -> None:
+        if self._llm_log is not None:
+            self._llm_log.record(
+                path=path,
+                language=str(language),
+                model=llm_cli_model() or "claude-cli",
+                messages=[{"role": "user", "content": prompt}],
+                response_raw=raw,
+                result=result,
+                finish_reason="",
+            )
+
     def enrich(
         self,
         path: str,
@@ -62,10 +78,16 @@ class ClaudeCliProvider:
                 check=True,
             )
         except subprocess.CalledProcessError as exc:
-            return left(f"claude-cli-error: {exc.returncode}")
+            error = f"claude-cli-error: {exc.returncode}"
+            self._log(path, language, prompt, error)
+            return left(error)
         try:
             wrapper = json.loads(proc.stdout)
             raw = wrapper["result"]
         except (json.JSONDecodeError, KeyError):
+            self._log(path, language, prompt, "claude-cli-parse-error", proc.stdout)
             return left("claude-cli-parse-error")
-        return _parse_enrichment(raw)
+        parsed = _parse_enrichment(raw)
+        result_label = "ok" if not isinstance(parsed, Left) else parsed.error
+        self._log(path, language, prompt, result_label, raw)
+        return parsed

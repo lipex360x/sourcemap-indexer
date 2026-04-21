@@ -119,6 +119,45 @@ def test_claude_cli_passes_model_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "claude-haiku-4-5-20251001" in captured[0]
 
 
+def test_claude_cli_calls_llm_log_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    import json  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.claude_cli_provider import ClaudeCliProvider  # noqa: PLC0415
+
+    payload = {
+        "purpose": "p",
+        "tags": ["t"],
+        "layer": "infra",
+        "stability": "stable",
+        "side_effects": [],
+        "invariants": [],
+    }
+    wrapper = json.dumps({"result": json.dumps(payload)})
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args, 0, stdout=wrapper, stderr="")
+
+    recorded: list[dict[str, object]] = []
+
+    class _SpyLog:
+        def record(self, **kwargs: object) -> None:
+            recorded.append(kwargs)
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/usr/bin/claude")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    monkeypatch.setattr(
+        "sourcemap_indexer.infra.claude_cli_provider._check_auth",
+        lambda: None,
+    )
+    ClaudeCliProvider(llm_log=_SpyLog()).enrich("app.py", Language.PY, "x = 1")
+    assert len(recorded) == 1
+    assert recorded[0]["result"] == "ok"
+    assert recorded[0]["path"] == "app.py"
+
+
 def test_claude_cli_passes_effort_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     import json  # noqa: PLC0415
     import shutil  # noqa: PLC0415
