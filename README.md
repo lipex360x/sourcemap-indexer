@@ -376,7 +376,7 @@ SOURCEMAP_LLM_API_KEY=your-api-key
 
 ### Using `claude-cli` provider
 
-If you have a Claude.ai subscription, you can run enrichment without an API key or local LLM server:
+If you have a Claude.ai subscription, you can run enrichment without an API key or local LLM server. When `SOURCEMAP_LLM_PROVIDER=claude-cli`, the `SOURCEMAP_LLM_URL`, `SOURCEMAP_LLM_MODEL`, and `SOURCEMAP_LLM_API_KEY` variables are ignored — you can keep them in your `.env` without conflict:
 
 ```bash
 # 1. Install and authenticate Claude CLI
