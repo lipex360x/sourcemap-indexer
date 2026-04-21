@@ -1,20 +1,25 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 
 from rich.align import Align as _Align
 from rich.console import ConsoleRenderable, RichCast
 from rich.panel import Panel as _Panel
-from rich.progress import ProgressColumn, Task
+from rich.progress import (
+    MofNCompleteColumn,
+    Progress,
+    ProgressColumn,
+    SpinnerColumn,
+    Task,
+    TaskID,
+    TextColumn,
+)
 from rich.text import Text as _Text
 
 _PANEL_STYLES: dict[str, str] = {"info": "bright_blue", "warn": "yellow", "error": "red"}
 
 _Renderable = ConsoleRenderable | RichCast | str
-
-
-def _panel(content: _Renderable, title: str, style: str = "info") -> _Panel:
-    return _Panel(content, title=title, border_style=_PANEL_STYLES[style], title_align="left")
 
 
 class _DotBarColumn(ProgressColumn):
@@ -28,32 +33,89 @@ class _DotBarColumn(ProgressColumn):
         return _Text("●" * filled + "○" * (width - filled), style="green")
 
 
-class _HybridProgressColumn(ProgressColumn):
-    def __init__(self, width: int = 20, speed: float = 16.0) -> None:
-        self._width = width
-        self._speed = speed
-        super().__init__()
+def _panel(content: _Renderable, title: str, style: str = "info") -> _Panel:
+    return _Panel(content, title=title, border_style=_PANEL_STYLES[style], title_align="left")
+
+
+class _StaticProgressColumn(ProgressColumn):
+    _WIDTH = 16
 
     def render(self, task: Task) -> _Text:
-        width = self._width
         if task.total is None or task.total == 0:
-            pulse = int(time.time() * self._speed) % width
-            return _Text("○" * pulse + "●" + "○" * (width - pulse - 1), style="dim")
-        green = min(width, round(task.completed / task.total * width))
-        pending = width - green
-        if pending == 0:
-            return _Text("●" * width, style="green")
-        cycle = max(1, pending * 2 - 2)
-        tick = int(time.time() * self._speed) % cycle
-        pulse_pos = tick if tick < pending else cycle - tick
+            return _Text("○" * self._WIDTH, style="dim")
+        filled = min(self._WIDTH, round(task.completed / task.total * self._WIDTH))
         text = _Text()
-        text.append("●" * green, style="green")
-        if pulse_pos > 0:
-            text.append("○" * pulse_pos, style="dim")
-        text.append("●", style="yellow")
-        if pending - pulse_pos - 1 > 0:
-            text.append("○" * (pending - pulse_pos - 1), style="dim")
+        text.append("●" * filled, style="green")
+        text.append("○" * (self._WIDTH - filled), style="dim")
         return text
+
+
+class _HeartbeatColumn(ProgressColumn):
+    _N = 4
+    _PERIOD = 0.8
+
+    def _brightness(self, dot: int, now: float) -> float:
+        phase = (now % self._PERIOD) / self._PERIOD
+        peak = phase * (self._N + 4) - 2
+        return max(0.0, 1.0 - abs(peak - dot) / 3.0)
+
+    def _color(self, brightness: float) -> str:
+        if brightness < 0.01:
+            return "grey42"
+        if brightness < 0.40:
+            return "#885500"
+        if brightness < 0.70:
+            return "#cc8800"
+        return "#ffcc00"
+
+    def render(self, task: Task) -> _Text:
+        text = _Text()
+        if task.total and task.completed >= task.total:
+            for _ in range(self._N):
+                text.append("●", style="green")
+            return text
+        now = time.time()
+        for dot in range(self._N):
+            text.append("●", style=self._color(self._brightness(dot, now)))
+        return text
+
+
+class EnrichProgressDisplay:
+    def __init__(self, prog: Progress, task_scan: TaskID, task_enrich: TaskID) -> None:
+        self._prog = prog
+        self._task_scan = task_scan
+        self._task_enrich = task_enrich
+
+    @classmethod
+    def create(cls) -> EnrichProgressDisplay:
+        prog = Progress(
+            SpinnerColumn(finished_text="[green]✓[/green]"),
+            TextColumn("[progress.description]{task.description}"),
+            _StaticProgressColumn(),
+            _HeartbeatColumn(),
+            MofNCompleteColumn(),
+            TextColumn("[dim]{task.fields[file]}[/dim]"),
+            refresh_per_second=20,
+        )
+        task_scan = prog.add_task("Scanning...", total=None, file="")
+        task_enrich = prog.add_task("Enriching...", total=None, file="", visible=False)
+        return cls(prog, task_scan, task_enrich)
+
+    def renderable(self) -> Progress:
+        return self._prog
+
+    def on_scan_complete(self) -> None:
+        self._prog.update(self._task_scan, visible=False)
+        self._prog.update(self._task_enrich, visible=True, description="Enriching...")
+
+    def on_file(self, path: str, success: bool, current: int, total: int) -> None:
+        if current == 1:
+            label = "file" if total == 1 else "files"
+            self._prog.update(self._task_enrich, description=f"Enriching  {total} {label}")
+        self._prog.update(self._task_enrich, completed=current, total=total, file=path)
+
+    def progress_callback(self) -> Callable[[str, bool, int, int], None]:
+        return self.on_file
 
 
 def _bar(value: int, maximum: int, width: int = 18) -> str:

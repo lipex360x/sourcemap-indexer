@@ -68,6 +68,31 @@ def restore(root: str | None = typer.Option(None, help="Project root")) -> None:
     typer.echo(f"Restored from {selected.name}")
 
 
+@app.command(name="show-loading", hidden=True)
+def show_loading(files: int = typer.Option(12, "--files")) -> None:
+    import time  # noqa: PLC0415
+
+    from rich.console import Console as _Console  # noqa: PLC0415
+    from rich.console import Group as _Group  # noqa: PLC0415
+    from rich.live import Live as _Live  # noqa: PLC0415
+
+    from sourcemap_indexer.cli._rendering import EnrichProgressDisplay, _panel  # noqa: PLC0415
+
+    display = EnrichProgressDisplay.create()
+    header = "[dim]Loading demo — 10s simulation[/dim]"
+    with _Live(
+        _panel(_Group(header, display.renderable()), "Demo"),
+        console=_Console(),
+        refresh_per_second=20,
+        transient=False,
+    ):
+        time.sleep(4)
+        display.on_scan_complete()
+        for i in range(1, files + 1):
+            time.sleep(16.0 / files)
+            display.on_file(f"src/example/file_{i}.py", True, i, files)
+
+
 @app.command(name="install-skill", help=_INSTALL_SKILL_HELP)
 def install_skill(
     target: str = typer.Option(..., "--target", help="Skills directory (e.g. ~/.claude/skills)"),

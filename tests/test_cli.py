@@ -219,53 +219,6 @@ class _MockTask:
         self.total = total
 
 
-def test_hybrid_bar_full_green_when_complete() -> None:
-    from sourcemap_indexer.cli._rendering import _HybridProgressColumn
-
-    col = _HybridProgressColumn(width=10)
-    text = col.render(_MockTask(10, 10))  # type: ignore[arg-type]
-    plain = text.plain
-    assert plain == "●" * 10
-    assert all(s.style == "green" for s in text._spans)
-
-
-def test_hybrid_bar_indeterminate_is_yellow() -> None:
-    from sourcemap_indexer.cli._rendering import _HybridProgressColumn
-
-    col = _HybridProgressColumn(width=10)
-    text = col.render(_MockTask(0, None))  # type: ignore[arg-type]
-    assert len(text.plain) == 10
-    assert all(s.style == "yellow" for s in text._spans)
-
-
-def test_hybrid_bar_partial_green_count_proportional() -> None:
-    from sourcemap_indexer.cli._rendering import _HybridProgressColumn
-
-    col = _HybridProgressColumn(width=10)
-    text = col.render(_MockTask(5, 10))  # type: ignore[arg-type]
-    assert len(text.plain) == 10
-    spans = text._spans
-    assert spans[0].style == "green"
-    green_text = text.plain[spans[0].start : spans[0].end]
-    assert green_text == "●" * 5
-    non_green = text.plain[spans[0].end :]
-    assert len(non_green) == 5
-
-
-def test_hybrid_bar_pending_has_one_yellow_pulse_rest_dim() -> None:
-    from sourcemap_indexer.cli._rendering import _HybridProgressColumn
-
-    col = _HybridProgressColumn(width=10)
-    text = col.render(_MockTask(3, 10))  # type: ignore[arg-type]
-    yellow_spans = [s for s in text._spans if s.style == "yellow"]
-    dim_spans = [s for s in text._spans if s.style == "dim"]
-    yellow_chars = "".join(text.plain[s.start : s.end] for s in yellow_spans)
-    dim_chars = "".join(text.plain[s.start : s.end] for s in dim_spans)
-    assert yellow_chars == "●"
-    assert set(dim_chars) <= {"○"}
-    assert len(dim_chars) + 1 == 7
-
-
 def test_panel_default_style_is_info() -> None:
     from rich.panel import Panel
 
@@ -1157,3 +1110,11 @@ def test_enrich_without_context_flag_passes_false_to_run_enrich(
     runner.invoke(app, ["init", "--root", str(tmp_path)])
     runner.invoke(app, ["enrich", "--root", str(tmp_path)])
     assert captured and captured[0] is False
+
+
+def test_show_loading_runs_without_error() -> None:
+    from unittest.mock import patch  # noqa: PLC0415
+
+    with patch("time.sleep"):
+        result = runner.invoke(app, ["show-loading", "--files", "3"])
+    assert result.exit_code == 0

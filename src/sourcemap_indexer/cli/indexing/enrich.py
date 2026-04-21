@@ -7,12 +7,11 @@ import typer
 from rich.console import Console as _Console
 from rich.console import Group as _Group
 from rich.live import Live as _Live
-from rich.progress import MofNCompleteColumn, Progress, SpinnerColumn, TaskID, TextColumn
 
 from sourcemap_indexer.application.enrich import EnrichReport, run_enrich
 from sourcemap_indexer.application.sync import SyncReport, run_sync
 from sourcemap_indexer.application.walk import run_walk
-from sourcemap_indexer.cli._rendering import _HybridProgressColumn, _panel
+from sourcemap_indexer.cli._rendering import EnrichProgressDisplay, _panel
 from sourcemap_indexer.cli._shared import (
     _FILE_HELP,
     _LANG_HELP,
@@ -230,9 +229,7 @@ def _run_enrich_session(
     message: str | None,
     file: str | None,
     valid_layers: frozenset[str],
-    prog: Progress,
-    task_scan: TaskID,
-    task_enrich: TaskID,
+    display: EnrichProgressDisplay,
     with_context: bool = False,
 ) -> Either[str, tuple[EnrichReport, SyncReport | None, float]]:
     walk_result = run_walk(project_root, index_path, known_files=repo.load_known_files())
@@ -240,22 +237,14 @@ def _run_enrich_session(
         return walk_result
     sync_result = run_sync(index_path, repo)
     pre_sync_report = sync_result.value if not isinstance(sync_result, Left) else None
-    prog.update(task_scan, visible=False)
-    prog.update(task_enrich, visible=True, description="Enriching...")
-
-    def _progress(path: str, success: bool, current: int, total: int) -> None:
-        if current == 1:
-            label = "file" if total == 1 else "files"
-            prog.update(task_enrich, description=f"Enriching  {total} {label}")
-        prog.update(task_enrich, completed=current, total=total, file=path)
-
+    display.on_scan_complete()
     started = time.perf_counter()
     enrich_result = run_enrich(
         project_root,
         repo,
         client,
         batch_limit=limit,
-        on_progress=_progress,
+        on_progress=display.progress_callback(),
         force=force,
         layer_filter=layer_val,
         language_filter=language_val,
@@ -312,18 +301,9 @@ def enrich(
         cli_effort=llm_cli_effort() if provider_name != "http" else None,
     )
     index_path = index_yaml_path(project_root)
-    prog = Progress(
-        SpinnerColumn(finished_text="[green]✓[/green]"),
-        TextColumn("[progress.description]{task.description}"),
-        _HybridProgressColumn(),
-        MofNCompleteColumn(),
-        TextColumn("[dim]{task.fields[file]}[/dim]"),
-        refresh_per_second=20,
-    )
-    task_scan = prog.add_task("Scanning...", total=None, file="")
-    task_enrich = prog.add_task("Enriching...", total=None, file="", visible=False)
+    display = EnrichProgressDisplay.create()
     with _Live(
-        _panel(_Group(header, prog), "Enrich"),
+        _panel(_Group(header, display.renderable()), "Enrich"),
         console=_Console(),
         refresh_per_second=20,
         transient=False,
@@ -340,9 +320,7 @@ def enrich(
             message,
             file,
             valid_layers,
-            prog,
-            task_scan,
-            task_enrich,
+            display,
             with_context,
         )
         if isinstance(session_result, Left):
