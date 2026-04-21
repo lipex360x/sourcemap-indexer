@@ -53,7 +53,7 @@ Query the local SQLite index built by sourcemap-indexer to understand any projec
 | Command | When to use |
 |---------|-------------|
 | `sourcemap brief` | **Project discovery** — totals, architecture, domain files, I/O boundaries, vocabulary, risk areas in one shot |
-| `sourcemap enrich [--limit N]` | Run LLM enrichment on pending files (validates LLM reachability first) |
+| `sourcemap enrich [--limit N]` | Run LLM enrichment on pending files. Provider selected via `SOURCEMAP_LLM_PROVIDER` (`http` default, or `claude-cli` for Claude subscription) |
 | `sourcemap enrich --force` | Re-enrich already enriched files (e.g. to fix language or layer) |
 | `sourcemap enrich --layer <L>` | Target only files in a specific layer (useful for `unknown`) |
 | `sourcemap enrich --language <L>` | Target only files in a specific language |
@@ -187,6 +187,6 @@ WHERE t.tag = 'authentication' ORDER BY i.layer;
 | Index not found or empty | Tell user to run `sourcemap init && sourcemap walk` |
 | `(no results)` on preset commands | Inform user that enrichment hasn't run yet for that data; suggest `sourcemap enrich --limit N` |
 | SQL error in `query` | Show the schema reference and suggest the corrected query |
-| LLM unreachable on `enrich` | Check `SOURCEMAP_LLM_URL` env var and confirm the server is running |
+| LLM unreachable on `enrich` | Check `SOURCEMAP_LLM_URL` env var and confirm the server is running. If using `claude-cli` provider, verify `claude auth status` |
 | User asks to reset the index | Run `sourcemap reset` — warns about irreversibility, offers backup (default Y) |
 | User wants to undo a reset | Run `sourcemap restore` — lists timestamped `.bak` files for selection |

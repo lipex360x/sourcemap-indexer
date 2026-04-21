@@ -350,8 +350,11 @@ All commands are invoked as `sourcemap <command>`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SOURCEMAP_LLM_URL` | _(required)_ | LLM endpoint (any OpenAI-compatible API) — `enrich` is blocked until this is set |
-| `SOURCEMAP_LLM_MODEL` | _(required)_ | Model name passed to the endpoint — `enrich` is blocked until this is set |
+| `SOURCEMAP_LLM_PROVIDER` | `http` | LLM backend — `http` (OpenAI-compatible HTTP server) or `claude-cli` (Claude.ai subscription via `claude -p`) |
+| `SOURCEMAP_LLM_URL` | _(required for `http`)_ | LLM endpoint (any OpenAI-compatible API) — `enrich` is blocked until this is set when using `http` provider |
+| `SOURCEMAP_LLM_MODEL` | _(required for `http`)_ | Model name passed to the endpoint — `enrich` is blocked until this is set when using `http` provider |
+| `SOURCEMAP_LLM_CLI_MODEL` | _(default model)_ | Claude model used by `claude-cli` provider — e.g. `claude-haiku-4-5-20251001`, `claude-sonnet-4-6`, `claude-opus-4-7`. Omit to use Claude's default |
+| `SOURCEMAP_LLM_CLI_EFFORT` | _(default)_ | Effort level for `claude-cli` provider — `low`, `medium`, `high`, `xhigh`, `max`. Controls thinking budget. Omit to use Claude's default |
 | `SOURCEMAP_LLM_API_KEY` | _(empty)_ | Bearer token for authenticated providers |
 | `SOURCEMAP_LLM_LOG` | _(off)_ | Set to `1` to write LLM request/response logs to `logs/` inside the maps directory |
 | `SOURCEMAP_PAGE_SIZE` | `20` | Number of pending files shown per page in `stats` |
@@ -372,6 +375,41 @@ SOURCEMAP_LLM_API_KEY=your-api-key
 
 > [!NOTE]
 > Variables already present in the shell environment take precedence over `.env` values.
+
+### Using `claude-cli` provider
+
+> [!NOTE]
+> The `claude-cli` provider runs via `claude -p` (Claude Code CLI). It requires [Claude Code](https://claude.ai/code) to be installed and authenticated — it does **not** work with other `claude` CLI tools.
+
+If you have a Claude.ai subscription, you can run enrichment without an API key or local LLM server. When `SOURCEMAP_LLM_PROVIDER=claude-cli`, the `SOURCEMAP_LLM_URL`, `SOURCEMAP_LLM_MODEL`, and `SOURCEMAP_LLM_API_KEY` variables are ignored — you can keep them in your `.env` without conflict.
+
+**Setup:**
+
+```bash
+# 1. Install Claude Code and authenticate
+npm install -g @anthropic-ai/claude-code
+claude auth login
+
+# 2. Set the provider
+export SOURCEMAP_LLM_PROVIDER=claude-cli
+```
+
+**Optional — choose model and effort:**
+
+```bash
+# Model (omit to use Claude's default)
+export SOURCEMAP_LLM_CLI_MODEL=claude-sonnet-4-6
+
+# Effort / thinking budget (omit to use Claude's default)
+# Values: low | medium | high | xhigh | max
+export SOURCEMAP_LLM_CLI_EFFORT=high
+```
+
+**Run:**
+
+```bash
+sourcemap enrich --limit 10
+```
 
 [↑ back to top](#top)
 
@@ -596,11 +634,11 @@ Every commit passes a pre-commit pipeline that enforces the following gates:
 
 | Tool | What it checks | Config |
 |------|---------------|--------|
-| **ruff** | Style, imports, simplification (`SIM`), returns (`RET`), bugbear (`B`), upgrades (`UP`) | `pyproject.toml [tool.ruff.lint]` |
+| **ruff** | Style, imports, simplification (`SIM`), returns (`RET`), bugbear (`B`), upgrades (`UP`), security (`S`) | `pyproject.toml [tool.ruff.lint]` |
 | **ruff format** | Consistent formatting (replaces Black) | `pyproject.toml [tool.ruff]` |
 | **McCabe complexity** | No function exceeds cyclomatic complexity 5 (`C901`) | `pyproject.toml [tool.ruff.lint.mccabe]` |
 | **mypy** | Full strict type checking — no `Any`, no untyped functions | `pyproject.toml [tool.mypy]` |
-| **bandit** | Security scan for common vulnerabilities | `pyproject.toml [tool.bandit]` |
+| **bandit** | Deep security scan — severity/confidence filtering, broader rule set | `pyproject.toml [tool.bandit]` |
 | **vulture** | Dead code detection — unused functions and variables | — |
 | **pylint C0103** | Naming convention enforcement — no abbreviations (`msg`, `cfg`, `err`, …) | `pyproject.toml [tool.pylint]` |
 | **pytest + coverage** | Test suite must pass at ≥ 95% line coverage | `pyproject.toml [tool.pytest]` |

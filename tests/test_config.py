@@ -10,6 +10,9 @@ from sourcemap_indexer.config import (
     find_project_root,
     import_prompt_path,
     index_yaml_path,
+    llm_cli_effort,
+    llm_cli_model,
+    llm_provider_name,
     logs_dir,
     maps_dir,
 )
@@ -128,3 +131,33 @@ def test_default_prompt_export_path_follows_custom_maps_dir(
 ) -> None:
     monkeypatch.setenv("SOURCEMAP_MAPS_DIR", "out/maps")
     assert default_prompt_export_path(tmp_path) == tmp_path / "out" / "maps" / "prompt.md"
+
+
+def test_llm_provider_name_defaults_to_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_PROVIDER", raising=False)
+    assert llm_provider_name() == "http"
+
+
+def test_llm_provider_name_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "claude-cli")
+    assert llm_provider_name() == "claude-cli"
+
+
+def test_llm_cli_model_none_when_not_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_CLI_MODEL", raising=False)
+    assert llm_cli_model() is None
+
+
+def test_llm_cli_model_returns_value_when_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_CLI_MODEL", "claude-sonnet-4-6")
+    assert llm_cli_model() == "claude-sonnet-4-6"
+
+
+def test_llm_cli_effort_none_when_not_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_CLI_EFFORT", raising=False)
+    assert llm_cli_effort() is None
+
+
+def test_llm_cli_effort_returns_value_when_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_CLI_EFFORT", "high")
+    assert llm_cli_effort() == "high"

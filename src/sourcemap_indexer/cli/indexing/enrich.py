@@ -27,6 +27,9 @@ from sourcemap_indexer.config import (
     default_prompt_export_path,
     import_prompt_path,
     index_yaml_path,
+    llm_cli_effort,
+    llm_cli_model,
+    llm_provider_name,
     logs_dir,
     maps_dir,
 )
@@ -40,6 +43,7 @@ from sourcemap_indexer.infra.llm_client import (
     from_environ,
     is_llm_configured,
 )
+from sourcemap_indexer.infra.llm_provider import LLMProvider, resolve_provider
 from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
 from sourcemap_indexer.lib.either import Either, Left, right
 from sourcemap_indexer.lib.llm_log import create_llm_log
@@ -90,7 +94,7 @@ def _handle_export_prompt(
     raise typer.Exit(0)
 
 
-def _create_client(
+def _create_http_client(
     project_root: Path,
     custom_prompt: str | None,
     valid_layers: frozenset[str],
@@ -122,6 +126,26 @@ def _create_client(
     return (client, config)
 
 
+def _create_provider(
+    project_root: Path,
+    provider_name: str,
+    custom_prompt: str | None,
+    valid_layers: frozenset[str],
+) -> tuple[LLMProvider, LlmConfig | None]:
+    if provider_name == "http":
+        client, config = _create_http_client(project_root, custom_prompt, valid_layers)
+        return (client, config)
+    result = resolve_provider(provider_name)
+    if isinstance(result, Left):
+        typer.echo(f"Error: unknown LLM provider '{provider_name}'", err=True)
+        raise typer.Exit(1)
+    llm_log = create_llm_log(logs_dir(project_root))
+    return (
+        result.value(llm_log=llm_log, system_prompt=custom_prompt, valid_layers=valid_layers),
+        None,
+    )
+
+
 def _build_filters(
     layer: str | None,
     language: str | None,
@@ -135,13 +159,32 @@ def _build_filters(
     )
 
 
+def _build_provider_lines(
+    config: LlmConfig | None,
+    provider_name: str,
+    cli_model: str | None,
+    cli_effort: str | None,
+) -> list[str]:
+    if config is not None:
+        connected = "  [green]●[/green] connected"
+        return [f"[bold]Model[/bold]  {config.model}  [dim]({config.url})[/dim]{connected}"]
+    parts = [f"[bold]Provider[/bold]  {provider_name}"]
+    if cli_model:
+        parts.append(f"[bold]Model[/bold]  {cli_model}")
+    if cli_effort:
+        parts.append(f"[bold]Effort[/bold]  {cli_effort}")
+    return parts
+
+
 def _build_enrich_header(
-    config: LlmConfig,
+    config: LlmConfig | None,
     import_path: Path | None,
     message: str | None,
+    provider_name: str = "http",
+    cli_model: str | None = None,
+    cli_effort: str | None = None,
 ) -> str:
-    connected = "  [green]●[/green] connected"
-    parts = [f"[bold]Model[/bold]  {config.model}  [dim]({config.url})[/dim]{connected}"]
+    parts = _build_provider_lines(config, provider_name, cli_model, cli_effort)
     if import_path is not None:
         parts.append(f"[bold]Prompt[/bold]  {import_path}")
     if message:
@@ -178,7 +221,7 @@ def _build_summary_lines(
 def _run_enrich_session(
     project_root: Path,
     repo: SqliteItemRepository,
-    client: LlmClient,
+    client: LLMProvider,
     index_path: Path,
     limit: int | None,
     force: bool,
@@ -249,10 +292,18 @@ def enrich(
         raise typer.Exit(1)
     valid_layers, import_path, custom_prompt = ctx_result.value
     _handle_export_prompt(export_llm_prompt, output, project_root, custom_prompt)
-    client, config = _create_client(project_root, custom_prompt, valid_layers)
+    provider_name = llm_provider_name()
+    client, config = _create_provider(project_root, provider_name, custom_prompt, valid_layers)
     repo = _open_repo(project_root)
     layer_val, language_val, force = _build_filters(layer, language, file, force)
-    header = _build_enrich_header(config, import_path, message)
+    header = _build_enrich_header(
+        config,
+        import_path,
+        message,
+        provider_name,
+        cli_model=llm_cli_model() if provider_name != "http" else None,
+        cli_effort=llm_cli_effort() if provider_name != "http" else None,
+    )
     index_path = index_yaml_path(project_root)
     prog = Progress(
         SpinnerColumn(finished_text="[green]✓[/green]"),

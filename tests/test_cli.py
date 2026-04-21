@@ -1055,3 +1055,62 @@ def test_enrich_shows_sync_insertions_from_pre_walk(
     result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
     assert result.exit_code == 0
     assert "Inserted" in result.output
+
+
+def test_build_enrich_header_shows_provider_name() -> None:
+    from sourcemap_indexer.cli.indexing.enrich import _build_enrich_header  # noqa: PLC0415
+
+    result = _build_enrich_header(None, None, None, "claude-cli")
+    assert "claude-cli" in result
+
+
+def test_build_enrich_header_shows_cli_model_when_set() -> None:
+    from sourcemap_indexer.cli.indexing.enrich import _build_enrich_header  # noqa: PLC0415
+
+    result = _build_enrich_header(
+        None, None, None, "claude-cli", cli_model="claude-haiku-4-5-20251001"
+    )
+    assert "claude-haiku-4-5-20251001" in result
+
+
+def test_build_enrich_header_shows_cli_effort_when_set() -> None:
+    from sourcemap_indexer.cli.indexing.enrich import _build_enrich_header  # noqa: PLC0415
+
+    result = _build_enrich_header(None, None, None, "claude-cli", cli_effort="high")
+    assert "high" in result
+
+
+def test_build_enrich_header_omits_model_effort_when_not_set() -> None:
+    from sourcemap_indexer.cli.indexing.enrich import _build_enrich_header  # noqa: PLC0415
+
+    result = _build_enrich_header(None, None, None, "claude-cli")
+    assert "Model" not in result
+    assert "Effort" not in result
+
+
+def test_llm_summary_line_shows_claude_cli_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "claude-cli")
+    monkeypatch.delenv("SOURCEMAP_LLM_CLI_MODEL", raising=False)
+    monkeypatch.delenv("SOURCEMAP_LLM_CLI_EFFORT", raising=False)
+    import sourcemap_indexer.cli.insights.stats as stats_mod  # noqa: PLC0415
+
+    importlib.reload(stats_mod)
+    result = stats_mod._llm_summary_line()
+    assert "claude-cli" in result
+    assert "not configured" not in result
+
+
+def test_llm_summary_line_shows_cli_model_and_effort(monkeypatch: pytest.MonkeyPatch) -> None:
+    import importlib  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "claude-cli")
+    monkeypatch.setenv("SOURCEMAP_LLM_CLI_MODEL", "claude-haiku-4-5-20251001")
+    monkeypatch.setenv("SOURCEMAP_LLM_CLI_EFFORT", "high")
+    import sourcemap_indexer.cli.insights.stats as stats_mod  # noqa: PLC0415
+
+    importlib.reload(stats_mod)
+    result = stats_mod._llm_summary_line()
+    assert "claude-haiku-4-5-20251001" in result
+    assert "high" in result

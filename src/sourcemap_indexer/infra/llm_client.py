@@ -272,3 +272,6 @@ class LlmClient:
         if self._config.json_mode:
             body["response_format"] = {"type": "json_object"}
         return self._attempt_and_retry(body, path, language, messages)
+
+
+HttpLLMProvider = LlmClient
