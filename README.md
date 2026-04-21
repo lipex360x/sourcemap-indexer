@@ -378,23 +378,38 @@ SOURCEMAP_LLM_API_KEY=your-api-key
 
 ### Using `claude-cli` provider
 
-If you have a Claude.ai subscription, you can run enrichment without an API key or local LLM server. When `SOURCEMAP_LLM_PROVIDER=claude-cli`, the `SOURCEMAP_LLM_URL`, `SOURCEMAP_LLM_MODEL`, and `SOURCEMAP_LLM_API_KEY` variables are ignored — you can keep them in your `.env` without conflict:
+> [!NOTE]
+> The `claude-cli` provider runs via `claude -p` (Claude Code CLI). It requires [Claude Code](https://claude.ai/code) to be installed and authenticated — it does **not** work with other `claude` CLI tools.
+
+If you have a Claude.ai subscription, you can run enrichment without an API key or local LLM server. When `SOURCEMAP_LLM_PROVIDER=claude-cli`, the `SOURCEMAP_LLM_URL`, `SOURCEMAP_LLM_MODEL`, and `SOURCEMAP_LLM_API_KEY` variables are ignored — you can keep them in your `.env` without conflict.
+
+**Setup:**
 
 ```bash
-# 1. Install and authenticate Claude CLI
+# 1. Install Claude Code and authenticate
 npm install -g @anthropic-ai/claude-code
 claude auth login
 
-# 2. Set the provider (optionally pick a model and effort level)
+# 2. Set the provider
 export SOURCEMAP_LLM_PROVIDER=claude-cli
-export SOURCEMAP_LLM_CLI_MODEL=claude-sonnet-4-6       # optional — omit to use default
-export SOURCEMAP_LLM_CLI_EFFORT=high                   # optional — low|medium|high|xhigh|max
-
-# 3. Run enrichment as usual
-sourcemap enrich --limit 10
 ```
 
-The `claude-cli` provider spawns `claude -p` as a subprocess for each file. No `SOURCEMAP_LLM_URL` or `SOURCEMAP_LLM_MODEL` needed.
+**Optional — choose model and effort:**
+
+```bash
+# Model (omit to use Claude's default)
+export SOURCEMAP_LLM_CLI_MODEL=claude-sonnet-4-6
+
+# Effort / thinking budget (omit to use Claude's default)
+# Values: low | medium | high | xhigh | max
+export SOURCEMAP_LLM_CLI_EFFORT=high
+```
+
+**Run:**
+
+```bash
+sourcemap enrich --limit 10
+```
 
 [↑ back to top](#top)
 
