@@ -66,7 +66,10 @@ class ClaudeCliProvider:
                 path=path,
                 language=str(language),
                 model=llm_cli_model() or "claude-cli",
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": self._system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
                 response_raw=raw,
                 result=result,
                 finish_reason="",

@@ -156,6 +156,11 @@ def test_claude_cli_calls_llm_log_on_success(monkeypatch: pytest.MonkeyPatch) ->
     assert len(recorded) == 1
     assert recorded[0]["result"] == "ok"
     assert recorded[0]["path"] == "app.py"
+    messages = recorded[0]["messages"]
+    assert isinstance(messages, list)
+    roles = [m["role"] for m in messages]
+    assert "system" in roles
+    assert "user" in roles
 
 
 def test_claude_cli_factory_forwards_llm_log() -> None:
