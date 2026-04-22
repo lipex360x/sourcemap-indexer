@@ -74,7 +74,7 @@ def test_init_db_is_safe_under_concurrent_calls(tmp_path: Path) -> None:
             outcome = init_db(db_path)
             if isinstance(outcome, Right):
                 outcome.value.close()
-        except BaseException as thrown:
+        except Exception as thrown:
             failures.append(thrown)
 
     first_thread = threading.Thread(target=run)

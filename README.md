@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/installed%20via-uv-5c4ee5?logo=astral&logoColor=white)](https://docs.astral.sh/uv/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-470%20passing-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
+[![Tests](https://img.shields.io/badge/tests-471%20passing-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
 [![Coverage](https://img.shields.io/badge/coverage-95%25%2B-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![mypy](https://img.shields.io/badge/mypy-strict-blue)](https://mypy.readthedocs.io/)
@@ -661,7 +661,7 @@ Every commit passes a pre-commit pipeline that enforces the following gates:
 ### Testing strategy
 
 - **TDD mandatory** — every behaviour is covered by a test written before the implementation (Red → Green)
-- **No mocks on persistence** — tests hit a real in-memory SQLite database (`":memory:"`)
+- **No mocks on persistence** — tests hit a real in-memory SQLite database (`":memory:"`); concurrency tests use a file-based DB via `tmp_path` (`:memory:` cannot be shared between threads)
 - **No mocks on the filesystem** — tests use `tmp_path` fixtures with real files
 - **Integration tests** run the full CLI via `typer.testing.CliRunner` end-to-end
 - **Coverage minimum: 95%** — enforced both by pytest and by the pre-push hook
@@ -675,5 +675,6 @@ Every commit passes a pre-commit pipeline that enforces the following gates:
 | No comments in source | Names carry meaning. Comments that explain *what* code does rot as code evolves; the only permitted comments are for non-obvious *why* — hidden constraints, workarounds, subtle invariants. |
 | Single output directory (`.sourcemap/`) | Config (`layers.yaml`, `ignore`) and data (`index.db`, `index.yaml`, `logs/`) live under one root. No two directories for the same concern. |
 | `_DEFAULT_LAYERS \| user_layers` | The full valid-layer set is the union of built-in defaults and user-defined additions, computed at startup and passed through to `run_enrich` and `LlmClient`. |
+| `BEGIN IMMEDIATE` + WAL in `init_db` | Migration apply is wrapped in a `BEGIN IMMEDIATE` transaction so two concurrent processes (e.g. parallel `walk` + `enrich`) cannot both pass the "already applied?" check and duplicate a migration. WAL journal mode reduces `SQLITE_BUSY` errors under concurrent readers. |
 
 <div align="right"><a href="#top">↑ back to top</a></div>
