@@ -18,3 +18,4 @@ build/
 htmlcov/
 .sourcemap/
 .env
+.docs/reviews

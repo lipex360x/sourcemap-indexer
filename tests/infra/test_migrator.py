@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 from sourcemap_indexer.infra.migrator import init_db
@@ -62,3 +63,32 @@ def test_init_db_returns_left_for_invalid_path() -> None:
     result = init_db(Path("/nonexistent_dir/that/does/not/exist/test.db"))
     assert isinstance(result, Left)
     assert result.error.startswith("db-error")
+
+
+def test_init_db_is_safe_under_concurrent_calls(tmp_path: Path) -> None:
+    db_path = tmp_path / "concurrent.db"
+    failures: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            outcome = init_db(db_path)
+            if isinstance(outcome, Right):
+                outcome.value.close()
+        except Exception as thrown:
+            failures.append(thrown)
+
+    first_thread = threading.Thread(target=run)
+    second_thread = threading.Thread(target=run)
+    first_thread.start()
+    second_thread.start()
+    first_thread.join()
+    second_thread.join()
+
+    assert not failures, f"thread raised: {failures[0]}"
+
+    verification = init_db(db_path)
+    assert isinstance(verification, Right)
+    counter = verification.value.execute("SELECT COUNT(*) FROM _migrations")
+    count = counter.fetchone()[0]
+    verification.value.close()
+    assert count == 1
