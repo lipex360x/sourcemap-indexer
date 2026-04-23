@@ -52,7 +52,9 @@ Query the local SQLite index built by sourcemap-indexer to understand any projec
 
 | Command | When to use |
 |---------|-------------|
-| `sourcemap brief` | **Project discovery** — totals, architecture, domain files, I/O boundaries, vocabulary, risk areas in one shot |
+| `sourcemap brief` | **Project discovery** — project metadata (when `project.yaml` exists), totals, architecture, domain files, I/O boundaries, vocabulary, risk areas in one shot |
+| `sourcemap chapters [--layer L]` | Table of contents — enriched files grouped by layer and sorted by path. Ideal for documentation-heavy projects |
+| `sourcemap contracts [--layer L]` | Invariants grouped by layer and file — the semantic contracts captured during enrichment. Use this instead of `brief` to read every invariant |
 | `sourcemap enrich [--limit N]` | Run LLM enrichment on pending files. Provider selected via `SOURCEMAP_LLM_PROVIDER` (`http` default, or `claude-cli` for Claude subscription) |
 | `sourcemap enrich --force` | Re-enrich already enriched files (e.g. to fix language or layer) |
 | `sourcemap enrich --layer <L>` | Target only files in a specific layer (useful for `unknown`) |
@@ -89,6 +91,28 @@ Layers: `domain | infra | application | cli | hook | lib | config | doc | test |
 Stability: `core | stable | experimental | deprecated | unknown`
 Effects: `writes_fs | spawns_process | network | git | environ`
 
+### Project metadata
+
+`brief` also reads `.sourcemap/project.yaml` (optional) to show a header with `name`, `version`, `purpose`, `audience`, and `license`. Any missing field is skipped. The file is never sent to the LLM — purely display.
+
+### Documentation-heavy projects
+
+For projects that are primarily documentation (blueprints, standards, specifications), declare doc-oriented layers in `.sourcemap/layers.yaml` so `brief`, `chapters`, and `find --layer` work at the right granularity. Example:
+
+```yaml
+layers:
+  - foundations
+  - enforcement
+  - operations
+  - shared
+  - stacks
+  - meta
+```
+
+After adding custom layers, run `sourcemap enrich --force` so every file is reclassified.
+
+When custom layers are declared, the system prompt automatically tells the LLM to prefer a user-defined layer over a generic default (`doc`, `config`, `unknown`) whenever the top-level directory matches. If a mismatch slips through, `sourcemap enrich` prints a **Layer mismatches** section at the end of its run, listing the offending files and their expected layer — no log inspection required.
+
 ## Steps
 
 ### 1. Run pre-flight
@@ -107,6 +131,8 @@ Match the intent to one of these modes:
 - **"Find files by concept/layer/tag"** → run steps 3b
 - **"Check risk areas"** → run steps 3c
 - **"Free-form query"** → run step 3d
+- **"Read the chapters / table of contents"** → `sourcemap chapters [--layer L]`
+- **"Read every contract / invariant / schema constraint"** → `sourcemap contracts [--layer L]`
 
 ### 3a. Full project overview
 

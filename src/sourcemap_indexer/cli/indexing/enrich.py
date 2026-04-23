@@ -208,6 +208,21 @@ def _build_summary_lines(
     ]
     for error in report.errors:
         lines.append(f"[red]![/red] {error}")
+    if report.layer_mismatches:
+        lines.append(
+            f"[yellow]![/yellow] [bold]Layer mismatches[/bold]: "
+            f"{len(report.layer_mismatches)} file(s) classified under a generic layer "
+            "despite matching a user-defined layer by directory:"
+        )
+        for path, chosen, expected in report.layer_mismatches:
+            lines.append(
+                f"  [yellow]→[/yellow] {path}  [dim]got[/dim] {chosen}  "
+                f"[dim]expected[/dim] [bold]{expected}[/bold]"
+            )
+        lines.append(
+            "  [dim]Fix: run `sourcemap enrich --force --file <path>` "
+            "or re-run enrich to retry.[/dim]"
+        )
     if pre_sync_report is not None and _has_sync_changes(pre_sync_report):
         lines.append(
             f"[bold]Inserted[/bold]: {pre_sync_report.inserted}   "
@@ -328,7 +343,8 @@ def enrich(
             raise typer.Exit(1)
         report, pre_sync_report, elapsed = session_result.value
         summary_lines = _build_summary_lines(report, elapsed, pre_sync_report)
-        panel_style = "warn" if report.failed > 0 else "info"
+        has_warning = report.failed > 0 or bool(report.layer_mismatches)
+        panel_style = "warn" if has_warning else "info"
         live.update(_panel(_Group(header, "\n".join(summary_lines)), "Enrich", style=panel_style))
     from sourcemap_indexer.cli.insights.stats import stats  # noqa: PLC0415
 

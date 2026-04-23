@@ -26,12 +26,13 @@
 | 6 | [Environment variables](#env) |
 | 7 | [Ignoring files](#ignoring) |
 | 8 | [Custom layers](#layers) |
-| 9 | [Plugging in a different LLM](#llm) |
-| 10 | [AI assistant skill](#skill) |
-| 11 | [Post-commit hook](#hook) |
-| 12 | [SQLite schema](#schema) |
-| 13 | [Dev setup](#dev) |
-| 14 | [Code quality](#quality) |
+| 9 | [Project metadata](#project) |
+| 10 | [Plugging in a different LLM](#llm) |
+| 11 | [AI assistant skill](#skill) |
+| 12 | [Post-commit hook](#hook) |
+| 13 | [SQLite schema](#schema) |
+| 14 | [Dev setup](#dev) |
+| 15 | [Code quality](#quality) |
 
 ---
 
@@ -63,6 +64,7 @@ your-project/
 │   ├── index.db          ← SQLite database (all metadata lives here)
 │   ├── index.yaml        ← YAML snapshot of the last walk (intermediate file)
 │   ├── layers.yaml       ← user-defined layer names (optional)
+│   ├── project.yaml      ← project metadata shown by brief (optional)
 │   └── logs/             ← LLM debug logs (only when SOURCEMAP_LLM_LOG=1)
 └── .sourcemapignore      ← gitignore-syntax exclusion rules
 ```
@@ -320,7 +322,9 @@ Constraints: depth 1 only (no transitive traversal); context is capped at 2000 c
 
 | Command | Description |
 |---------|-------------|
-| `brief` | Single-call project briefing — architecture, domain files, tags, side effects, risk areas |
+| `brief` | Single-call project briefing — architecture, domain files, tags, side effects, risk areas (includes project metadata when `.sourcemap/project.yaml` is present) |
+| `chapters` | Table of contents — enriched files grouped by layer and sorted by path (ideal for documentation-heavy projects) |
+| `contracts` | Invariants grouped by layer and file — the semantic contracts captured during enrichment |
 | `profile` | Language distribution, inferred layers, test ratio, top files by size |
 | `stats` | Auto-runs walk; counts by layer and language; bar width = relative file count; green = enriched, yellow = pending |
 | `overview` | Layer × language matrix |
@@ -331,6 +335,12 @@ Constraints: depth 1 only (no transitive traversal); context is capped at 2000 c
 | `find` | Search files by tag, layer, or language |
 | `show <path>` | Full metadata for a specific file |
 | `query "<sql>"` | Free-form SQL against the index database |
+
+`chapters` and `contracts` flags:
+
+| Flag | Description |
+|------|-------------|
+| `--layer L` | Restrict the output to a single layer |
 
 `stats` flags:
 
@@ -503,13 +513,61 @@ layers:
 > [!TIP]
 > After adding new layers, run `sourcemap enrich --force --layer unknown` to re-classify files that were previously unrecognised.
 
+### Documentation-heavy projects
+
+Default layers are code-oriented. For projects that are primarily documentation (blueprints, standards, specifications), declare layers that match the document taxonomy so `brief`, `chapters`, and `find --layer` work at the right granularity. Example for a governance/blueprint repository:
+
+```yaml
+layers:
+  - foundations    # principles, philosophy, testing mandates
+  - enforcement    # tools, scripts, cognitive-load limits
+  - operations     # logging, error contracts, roadmap
+  - shared         # stack-invariant configuration
+  - stacks         # per-stack tool mappings
+  - meta           # manifest-like documents
+```
+
+After declaring the layers, run `sourcemap enrich --force` so the LLM reclassifies every file using the richer taxonomy.
+
+> [!NOTE]
+> The system prompt is extended automatically when custom layers are declared. The LLM is told to prefer a user-defined layer over a generic default (`doc`, `config`, `unknown`) whenever the file's top-level directory name matches a custom layer.
+>
+> If a mismatch slips through anyway — e.g. the model chose `doc` for a file under `foundations/` — `sourcemap enrich` prints a highlighted **Layer mismatches** section at the end of the run. No need to open logs or query the DB: the warning lists each path with its chosen and expected layer. Re-run `sourcemap enrich --force --file <path>` to retry.
+
+<div align="right"><a href="#top">↑ back to top</a></div>
+
+---
+
+<a id="project"></a>
+
+## 9. Project metadata
+
+`brief` can display a short metadata header when `.sourcemap/project.yaml` exists. All fields are optional — any field left out is skipped from the output:
+
+```yaml
+name: engineering-blueprint
+version: 1
+purpose: Language-agnostic foundation for building software with Claude-assisted workflows.
+audience:
+  - claude
+  - engineer
+license: MIT
+```
+
+`audience` accepts a list or a single string. `version` accepts any scalar (string, integer, etc.) and is rendered verbatim.
+
+When the file is absent, `brief` renders without a project section — no regressions for existing projects.
+
+> [!NOTE]
+> `project.yaml` is purely informational. It does not change enrichment behaviour and is never sent to the LLM.
+
 <div align="right"><a href="#top">↑ back to top</a></div>
 
 ---
 
 <a id="llm"></a>
 
-## 9. Plugging in a different LLM
+## 10. Plugging in a different LLM
 
 The enrichment client targets any OpenAI-compatible endpoint:
 
@@ -538,7 +596,7 @@ sourcemap enrich --limit 10
 
 <a id="skill"></a>
 
-## 10. AI assistant skill
+## 11. AI assistant skill
 
 Install the bundled skill file so your AI assistant can query the index directly:
 
@@ -556,7 +614,7 @@ sourcemap install-skill --target <your-tool-skills-dir>
 
 <a id="hook"></a>
 
-## 11. Post-commit hook (auto-walk on every commit)
+## 12. Post-commit hook (auto-walk on every commit)
 
 ```bash
 bash scripts/bash/install-hook.sh
@@ -573,7 +631,7 @@ Installs a `post-commit` hook that runs `sourcemap walk` after every commit, kee
 
 <a id="schema"></a>
 
-## 12. SQLite schema
+## 13. SQLite schema
 
 One core table (`items`) holds a row per file. Three satellite tables store the multi-valued LLM output (a file has many tags, many side effects, many invariants):
 
@@ -626,7 +684,7 @@ Side effects: `writes_fs | spawns_process | network | git | environ`
 
 <a id="dev"></a>
 
-## 13. Dev setup
+## 14. Dev setup
 
 ```bash
 git clone https://github.com/lipex360x/sourcemap-indexer.git
@@ -641,7 +699,7 @@ uv run pytest
 
 <a id="quality"></a>
 
-## 14. Code quality
+## 15. Code quality
 
 Every commit passes a pre-commit pipeline that enforces the following gates:
 

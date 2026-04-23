@@ -195,6 +195,99 @@ def test_enrich_report_fields() -> None:
     assert report.failed == 2
     assert report.skipped == 0
     assert report.errors == ("e1",)
+    assert report.layer_mismatches == ()
+
+
+def test_enrich_flags_layer_mismatch_when_directory_matches_custom_layer(
+    tmp_path: Path,
+) -> None:
+    repo = _make_repo()
+    (tmp_path / "foundations").mkdir()
+    (tmp_path / "foundations" / "overview.md").write_text("title\n")
+    item = _make_item("foundations/overview.md", tmp_path)
+    repo.upsert(item)
+    mismatched = EnrichmentResult(
+        purpose="Overview doc",
+        tags=frozenset({"overview"}),
+        layer="doc",
+        stability=Stability.STABLE,
+        side_effects=frozenset(),
+        invariants=(),
+    )
+    client = _stub(right(mismatched))
+    result = run_enrich(
+        tmp_path,
+        repo,
+        client,  # type: ignore[arg-type]
+        valid_layers=frozenset({"doc", "foundations", "unknown"}),
+    )
+    assert isinstance(result, Right)
+    assert result.value.layer_mismatches == (("foundations/overview.md", "doc", "foundations"),)
+
+
+def test_enrich_no_mismatch_when_layer_matches_directory(tmp_path: Path) -> None:
+    repo = _make_repo()
+    (tmp_path / "foundations").mkdir()
+    (tmp_path / "foundations" / "overview.md").write_text("title\n")
+    item = _make_item("foundations/overview.md", tmp_path)
+    repo.upsert(item)
+    matched = EnrichmentResult(
+        purpose="Overview doc",
+        tags=frozenset({"overview"}),
+        layer="foundations",
+        stability=Stability.STABLE,
+        side_effects=frozenset(),
+        invariants=(),
+    )
+    client = _stub(right(matched))
+    result = run_enrich(
+        tmp_path,
+        repo,
+        client,  # type: ignore[arg-type]
+        valid_layers=frozenset({"doc", "foundations", "unknown"}),
+    )
+    assert isinstance(result, Right)
+    assert result.value.layer_mismatches == ()
+
+
+def test_enrich_no_mismatch_when_no_custom_layers(tmp_path: Path) -> None:
+    repo = _make_repo()
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("x = 1\n")
+    item = _make_item("src/app.py", tmp_path)
+    repo.upsert(item)
+    client = _stub(right(_VALID_RESULT))
+    result = run_enrich(tmp_path, repo, client)  # type: ignore[arg-type]
+    assert isinstance(result, Right)
+    assert result.value.layer_mismatches == ()
+
+
+def test_enrich_mismatch_uses_top_level_directory_only(tmp_path: Path) -> None:
+    repo = _make_repo()
+    nested = tmp_path / "operations" / "deep" / "nested"
+    nested.mkdir(parents=True)
+    (nested / "file.md").write_text("deep\n")
+    item = _make_item("operations/deep/nested/file.md", tmp_path)
+    repo.upsert(item)
+    mismatched = EnrichmentResult(
+        purpose="Nested doc",
+        tags=frozenset({"nested"}),
+        layer="doc",
+        stability=Stability.STABLE,
+        side_effects=frozenset(),
+        invariants=(),
+    )
+    client = _stub(right(mismatched))
+    result = run_enrich(
+        tmp_path,
+        repo,
+        client,  # type: ignore[arg-type]
+        valid_layers=frozenset({"doc", "operations", "unknown"}),
+    )
+    assert isinstance(result, Right)
+    assert result.value.layer_mismatches == (
+        ("operations/deep/nested/file.md", "doc", "operations"),
+    )
 
 
 def test_on_progress_callback_called_per_file(tmp_path: Path) -> None:

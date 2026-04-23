@@ -575,6 +575,30 @@ def test_build_system_prompt_default_layers_match_system_prompt() -> None:
     assert build_system_prompt(_DEFAULT_LAYERS) == SYSTEM_PROMPT
 
 
+def test_build_system_prompt_adds_hint_when_custom_layers_present() -> None:
+    prompt = build_system_prompt(frozenset({"controller", "service"}))
+    assert "User-defined layers" in prompt
+    assert "controller" in prompt
+    assert "service" in prompt
+
+
+def test_build_system_prompt_no_hint_when_only_defaults() -> None:
+    from sourcemap_indexer.domain.value_objects import _DEFAULT_LAYERS
+
+    prompt = build_system_prompt(_DEFAULT_LAYERS)
+    assert "User-defined layers" not in prompt
+
+
+def test_build_system_prompt_hint_lists_only_custom_layers() -> None:
+    from sourcemap_indexer.domain.value_objects import _DEFAULT_LAYERS
+
+    prompt = build_system_prompt(_DEFAULT_LAYERS | frozenset({"foundations", "enforcement"}))
+    hint_start = prompt.index("User-defined layers")
+    hint_section = prompt[hint_start:]
+    assert "foundations" in hint_section
+    assert "enforcement" in hint_section
+
+
 def test_llm_client_uses_valid_layers_in_prompt() -> None:
     captured: list[str] = []
 

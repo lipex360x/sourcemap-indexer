@@ -8,6 +8,8 @@ from sourcemap_indexer.cli.indexing import sync as _sync_mod  # noqa: F401
 from sourcemap_indexer.cli.indexing import walk as _walk_mod  # noqa: F401
 from sourcemap_indexer.cli.insights import analysis as _analysis_mod  # noqa: F401
 from sourcemap_indexer.cli.insights import brief as _brief_mod  # noqa: F401
+from sourcemap_indexer.cli.insights import chapters as _chapters_mod  # noqa: F401
+from sourcemap_indexer.cli.insights import contracts as _contracts_mod  # noqa: F401
 from sourcemap_indexer.cli.insights import profile as _profile_mod  # noqa: F401
 from sourcemap_indexer.cli.insights import search as _search_mod  # noqa: F401
 from sourcemap_indexer.cli.insights import stats as _stats_mod  # noqa: F401

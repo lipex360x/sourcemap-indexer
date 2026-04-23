@@ -10,7 +10,7 @@ from typing import Protocol
 from sourcemap_indexer.application.import_context import resolve_import_context
 from sourcemap_indexer.domain.entities import Item
 from sourcemap_indexer.domain.repository import ItemRepository
-from sourcemap_indexer.domain.value_objects import Language, Layer, Stability
+from sourcemap_indexer.domain.value_objects import _DEFAULT_LAYERS, Language, Layer, Stability
 from sourcemap_indexer.infra.import_extractor import _EXTRACTORS
 from sourcemap_indexer.infra.llm_client import EnrichmentResult
 from sourcemap_indexer.lib.either import Either, Left, left, right
@@ -103,6 +103,23 @@ class EnrichReport:
     failed: int
     skipped: int
     errors: tuple[str, ...]
+    layer_mismatches: tuple[tuple[str, str, str], ...] = ()
+
+
+def _top_directory(path: str) -> str:
+    head, sep, _ = path.partition("/")
+    return head if sep else ""
+
+
+def _detect_layer_mismatch(
+    path: str, chosen_layer: str, custom_layers: frozenset[str]
+) -> tuple[str, str, str] | None:
+    if not custom_layers:
+        return None
+    top = _top_directory(path)
+    if top in custom_layers and chosen_layer != top and chosen_layer in _DEFAULT_LAYERS:
+        return (path, chosen_layer, top)
+    return None
 
 
 def _progress_notify(
@@ -141,7 +158,7 @@ def _handle_normal_file(
     extra_instruction: str | None,
     import_context: str | None,
     now: int,
-) -> Either[str, None]:
+) -> Either[str, tuple[str, str, str] | None]:
     enrich_result = client.enrich(
         item.path, item.language, content, extra_instruction, import_context
     )
@@ -162,7 +179,8 @@ def _handle_normal_file(
     upsert_result = repository.upsert(updated)
     if isinstance(upsert_result, Left):
         return left(f"{upsert_result.error}: {item.path}")
-    return right(None)
+    custom_layers = valid_layers - _DEFAULT_LAYERS if valid_layers is not None else frozenset()
+    return right(_detect_layer_mismatch(item.path, result_data.layer, custom_layers))
 
 
 def _enrich_item(
@@ -174,13 +192,16 @@ def _enrich_item(
     extra_instruction: str | None,
     now: int,
     with_context: bool = False,
-) -> Either[str, None]:
+) -> Either[str, tuple[str, str, str] | None]:
     try:
         content = (root / item.path).read_text(encoding="utf-8", errors="replace")
     except OSError:
         return left(f"read-error: {item.path}")
     if item.size_bytes == 0:
-        return _handle_empty_file(item, repository, now)
+        empty_result = _handle_empty_file(item, repository, now)
+        if isinstance(empty_result, Left):
+            return empty_result
+        return right(None)
     import_context = (
         resolve_import_context(item, content, repository, _CONTEXT_MAX_CHARS)
         if with_context
@@ -218,6 +239,7 @@ def run_enrich(
     total_items = len(pending)
     enriched = failed = 0
     errors: list[str] = []
+    mismatches: list[tuple[str, str, str]] = []
     now = int(time.time())
     for done, item in enumerate(pending, start=1):
         result = _enrich_item(
@@ -229,5 +251,15 @@ def run_enrich(
             _progress_notify(on_progress, item.path, False, done, total_items)
         else:
             enriched += 1
+            if result.value is not None:
+                mismatches.append(result.value)
             _progress_notify(on_progress, item.path, True, done, total_items)
-    return right(EnrichReport(enriched=enriched, failed=failed, skipped=0, errors=tuple(errors)))
+    return right(
+        EnrichReport(
+            enriched=enriched,
+            failed=failed,
+            skipped=0,
+            errors=tuple(errors),
+            layer_mismatches=tuple(mismatches),
+        )
+    )

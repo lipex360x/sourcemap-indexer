@@ -22,7 +22,8 @@ from sourcemap_indexer.lib.llm_log import LlmLog
 
 def build_system_prompt(valid_layers: frozenset[str]) -> str:
     layers_str = " | ".join(sorted(valid_layers))
-    return (
+    custom = valid_layers - _DEFAULT_LAYERS
+    base = (
         "You are a code analyser. You receive a source file and return ONLY valid JSON, "
         "no markdown fence, no extra text, no comments. The JSON follows THIS exact schema:\n\n"
         '{"purpose": "string — 1 to 2 sentences in English describing WHAT the file does '
@@ -38,6 +39,17 @@ def build_system_prompt(valid_layers: frozenset[str]) -> str:
         "- Reply with ONLY the JSON object. Zero text before or after.\n"
         '- If unsure about a field, use "unknown" (enums) or empty array.\n'
         "- Never include credentials or absolute paths in purpose/tags."
+    )
+    if not custom:
+        return base
+    custom_str = ", ".join(sorted(custom))
+    return base + (
+        "\n- User-defined layers are declared for this project: "
+        f"{custom_str}. These encode the project's own taxonomy and take priority "
+        "over generic defaults (doc, config, lib, unknown) whenever applicable. "
+        "When the file's top-level directory name matches a user-defined layer "
+        "exactly, that layer IS the correct choice — do not fall back to a generic "
+        "default just because the file is documentation or configuration."
     )
 
 

@@ -775,6 +775,220 @@ def test_brief_invariants_excludes_test_layer(tmp_path: Path) -> None:
     assert "test convention" not in result.output
 
 
+def test_brief_shows_project_meta_when_configured(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    (tmp_path / ".sourcemap" / "project.yaml").write_text(
+        "name: demo\nversion: 1\npurpose: testing the brief\naudience: claude\nlicense: MIT\n"
+    )
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "name" in result.output
+    assert "demo" in result.output
+    assert "testing the brief" in result.output
+    assert "MIT" in result.output
+
+
+def test_brief_omits_project_section_when_absent(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "license" not in result.output
+    assert "audience" not in result.output
+
+
+def test_brief_renders_partial_project_fields(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    (tmp_path / ".sourcemap" / "project.yaml").write_text("name: partial\n")
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "partial" in result.output
+    assert "audience" not in result.output
+    assert "license" not in result.output
+
+
+def test_brief_fails_on_malformed_project_yaml(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    (tmp_path / ".sourcemap" / "project.yaml").write_text("name: [\nbroken")
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+    assert "project-yaml-invalid" in result.output
+
+
+def _seed_contracts_db(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'foundations/01-philosophy.md', '01-philosophy.md', 'md', "
+        "'foundations', 'core', 'principles', 100, 500, 'abc', 0, 0, 0)"
+    )
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (2, 'enforcement/03-tools.yaml', '03-tools.yaml', 'yaml', "
+        "'enforcement', 'stable', 'tool categories', 100, 500, 'def', 0, 0, 0)"
+    )
+    conn.execute(
+        "INSERT INTO invariants (item_id, position, invariant) "
+        "VALUES (1, 0, 'Rules enforced by gates')"
+    )
+    conn.execute(
+        "INSERT INTO invariants (item_id, position, invariant) "
+        "VALUES (1, 1, 'Violations impossible to commit')"
+    )
+    conn.execute(
+        "INSERT INTO invariants (item_id, position, invariant) "
+        "VALUES (2, 0, 'Each tool category defines enforces property')"
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_contracts_shows_invariants_grouped_by_layer(tmp_path: Path) -> None:
+    _seed_contracts_db(tmp_path)
+    result = runner.invoke(app, ["contracts", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "foundations" in result.output
+    assert "enforcement" in result.output
+    assert "Rules enforced by gates" in result.output
+    assert "Each tool category defines enforces property" in result.output
+
+
+def test_contracts_filters_by_layer(tmp_path: Path) -> None:
+    _seed_contracts_db(tmp_path)
+    result = runner.invoke(app, ["contracts", "--root", str(tmp_path), "--layer", "foundations"])
+    assert result.exit_code == 0
+    assert "Rules enforced by gates" in result.output
+    assert "Each tool category defines enforces property" not in result.output
+
+
+def test_contracts_empty_state(tmp_path: Path) -> None:
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["contracts", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "No contracts found" in result.output
+
+
+def test_contracts_fails_without_index(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["contracts", "--root", str(tmp_path / "missing")])
+    assert result.exit_code != 0
+
+
+def test_contracts_includes_path_under_layer(tmp_path: Path) -> None:
+    _seed_contracts_db(tmp_path)
+    result = runner.invoke(app, ["contracts", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "foundations/01-philosophy.md" in result.output
+    assert "enforcement/03-tools.yaml" in result.output
+
+
+def _seed_chapters_db(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    rows = [
+        (
+            1,
+            "foundations/00-overview.md",
+            "00-overview.md",
+            "md",
+            "foundations",
+            "stable",
+            "entry point",
+        ),
+        (
+            2,
+            "foundations/01-philosophy.md",
+            "01-philosophy.md",
+            "md",
+            "foundations",
+            "core",
+            "principles",
+        ),
+        (
+            3,
+            "enforcement/03-tools.yaml",
+            "03-tools.yaml",
+            "yaml",
+            "enforcement",
+            "stable",
+            "tool categories",
+        ),
+        (4, "pending.md", "pending.md", "md", "unknown", "unknown", None),
+    ]
+    for item in rows[:3]:
+        conn.execute(
+            "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+            "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 100, 500, 'abc', 0, 0, 0)",
+            item,
+        )
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (4, 'pending.md', 'pending.md', 'md', 'unknown', 'unknown', NULL, "
+        "10, 50, 'def', 1, 0, 0)"
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_chapters_lists_enriched_files_grouped_by_layer(tmp_path: Path) -> None:
+    _seed_chapters_db(tmp_path)
+    result = runner.invoke(app, ["chapters", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "foundations" in result.output
+    assert "enforcement" in result.output
+    assert "00-overview.md" in result.output
+    assert "03-tools.yaml" in result.output
+
+
+def test_chapters_preserves_alphabetical_path_order(tmp_path: Path) -> None:
+    _seed_chapters_db(tmp_path)
+    result = runner.invoke(app, ["chapters", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    idx_00 = result.output.find("00-overview.md")
+    idx_01 = result.output.find("01-philosophy.md")
+    assert idx_00 < idx_01
+
+
+def test_chapters_shows_purpose_per_file(tmp_path: Path) -> None:
+    _seed_chapters_db(tmp_path)
+    result = runner.invoke(app, ["chapters", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "entry point" in result.output
+    assert "tool categories" in result.output
+
+
+def test_chapters_excludes_non_enriched(tmp_path: Path) -> None:
+    _seed_chapters_db(tmp_path)
+    result = runner.invoke(app, ["chapters", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "pending.md" not in result.output
+
+
+def test_chapters_filters_by_layer(tmp_path: Path) -> None:
+    _seed_chapters_db(tmp_path)
+    result = runner.invoke(app, ["chapters", "--root", str(tmp_path), "--layer", "enforcement"])
+    assert result.exit_code == 0
+    assert "03-tools.yaml" in result.output
+    assert "00-overview.md" not in result.output
+
+
+def test_chapters_empty_state(tmp_path: Path) -> None:
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["chapters", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "No chapters found" in result.output
+
+
+def test_chapters_fails_without_index(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["chapters", "--root", str(tmp_path / "missing")])
+    assert result.exit_code != 0
+
+
 def test_reset_confirmed_deletes_db(tmp_path: Path) -> None:
     _init_sync(tmp_path)
     db_file = tmp_path / ".sourcemap" / "index.db"
@@ -1008,6 +1222,74 @@ def test_enrich_shows_sync_insertions_from_pre_walk(
     result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
     assert result.exit_code == 0
     assert "Inserted" in result.output
+
+
+def test_enrich_shows_layer_mismatches_in_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sourcemap_indexer.cli as cli_module
+    from sourcemap_indexer.application.enrich import EnrichReport
+    from sourcemap_indexer.application.sync import SyncReport
+    from sourcemap_indexer.lib.either import right
+
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: right(None))
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_walk",
+        lambda *_a, **_kw: right(1),
+    )
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_sync",
+        lambda *_a, **_kw: right(SyncReport(inserted=0, updated=0, soft_deleted=0, unchanged=1)),
+    )
+    report = EnrichReport(
+        enriched=1,
+        failed=0,
+        skipped=0,
+        errors=(),
+        layer_mismatches=(("foundations/intro.md", "doc", "foundations"),),
+    )
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_enrich",
+        lambda *_a, **_kw: right(report),
+    )
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Layer mismatches" in result.output
+    assert "foundations/intro.md" in result.output
+    assert "doc" in result.output
+    assert "foundations" in result.output
+
+
+def test_enrich_without_mismatches_omits_mismatch_section(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sourcemap_indexer.cli as cli_module
+    from sourcemap_indexer.application.enrich import EnrichReport
+    from sourcemap_indexer.application.sync import SyncReport
+    from sourcemap_indexer.lib.either import right
+
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: right(None))
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_walk",
+        lambda *_a, **_kw: right(1),
+    )
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_sync",
+        lambda *_a, **_kw: right(SyncReport(inserted=0, updated=0, soft_deleted=0, unchanged=1)),
+    )
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_enrich",
+        lambda *_a, **_kw: right(EnrichReport(enriched=1, failed=0, skipped=0, errors=())),
+    )
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Layer mismatches" not in result.output
 
 
 def test_build_enrich_header_shows_provider_name() -> None:

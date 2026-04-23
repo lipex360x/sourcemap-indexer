@@ -5,7 +5,9 @@ import sqlite3
 import typer
 
 from sourcemap_indexer.cli._shared import _resolve_root, app
-from sourcemap_indexer.config import db_path
+from sourcemap_indexer.config import db_path, maps_dir
+from sourcemap_indexer.infra.project_config import ProjectMeta, load_project_meta
+from sourcemap_indexer.lib.either import Left
 
 _BEHAVIOR_LAYERS = frozenset({"domain", "application", "infra", "lib"})
 
@@ -56,6 +58,19 @@ _SEP = "─" * 56
 def _section(title: str) -> None:
     typer.echo(f"\n## {title}")
     typer.echo(_SEP)
+
+
+def _print_project(meta: ProjectMeta) -> None:
+    fields: list[tuple[str, str | None]] = [
+        ("name", meta.name),
+        ("version", meta.version),
+        ("purpose", meta.purpose),
+        ("audience", meta.audience),
+        ("license", meta.license_name),
+    ]
+    for label, value in fields:
+        if value is not None:
+            typer.echo(f"  {label:<9} {value}")
 
 
 def _print_totals(conn: sqlite3.Connection) -> None:
@@ -158,15 +173,24 @@ def _print_risk(conn: sqlite3.Connection) -> None:
 
 @app.command(help="Single-call project briefing for AI-assisted discovery.")
 def brief(root: str | None = typer.Option(None, help="Project root")) -> None:
-    db_file = db_path(_resolve_root(root))
+    project_root = _resolve_root(root)
+    db_file = db_path(project_root)
     if not db_file.exists():
         typer.echo("Error: index not found. Run 'sourcemap init' first.", err=True)
         raise typer.Exit(1)
+    meta_result = load_project_meta(maps_dir(project_root))
+    if isinstance(meta_result, Left):
+        typer.echo(f"Error: {meta_result.error}", err=True)
+        raise typer.Exit(1)
+    meta = meta_result.value
     conn = sqlite3.connect(str(db_file))
     conn.row_factory = sqlite3.Row
     try:
         typer.echo("# Project Brief")
         typer.echo(_SEP)
+        if meta is not None:
+            _print_project(meta)
+            typer.echo("")
         _print_totals(conn)
         _section("Structure")
         _print_structure(conn)
