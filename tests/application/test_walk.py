@@ -148,3 +148,53 @@ def test_run_walk_output_outside_root_does_not_add_ignore_pattern(tmp_path: Path
     assert isinstance(result, Right)
     (outside_dir / "index.yaml").unlink(missing_ok=True)
     outside_dir.rmdir()
+
+
+def test_run_walk_output_path_absent_when_tmp_write_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "main.py").write_text("x = 1\n")
+    output = tmp_path / "index.yaml"
+    temp_file = output.with_suffix(".yaml.tmp")
+
+    original_write = Path.write_text
+
+    def fail_on_temp(self: Path, text: str, **kwargs: object) -> None:
+        if self == temp_file:
+            raise OSError("simulated mid-write failure")
+        return original_write(self, text, **kwargs)  # type: ignore[return-value]
+
+    monkeypatch.setattr(Path, "write_text", fail_on_temp)
+    result = run_walk(tmp_path, output)
+
+    assert isinstance(result, Left)
+    assert not output.exists()
+
+
+def test_run_walk_no_leftover_temp_on_write_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "main.py").write_text("x = 1\n")
+    output = tmp_path / "index.yaml"
+    temp_file = output.with_suffix(".yaml.tmp")
+    temp_file.write_text("stale")
+
+    def always_fail(self: Path, text: str, **kwargs: object) -> None:
+        raise OSError("simulated disk-full failure")
+
+    monkeypatch.setattr(Path, "write_text", always_fail)
+    run_walk(tmp_path, output)
+
+    assert not temp_file.exists()
+
+
+def test_run_walk_no_leftover_temp_on_success(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text("x = 1\n")
+    output = tmp_path / "index.yaml"
+    temp_file = output.with_suffix(".yaml.tmp")
+    temp_file.write_text("stale")
+
+    result = run_walk(tmp_path, output)
+
+    assert isinstance(result, Right)
+    assert not temp_file.exists()
