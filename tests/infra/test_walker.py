@@ -398,3 +398,37 @@ def test_walk_project_returns_left_on_permission_error(
     result = walk_project(tmp_path)
     assert isinstance(result, Left)
     assert "walk-error" in result.error
+
+
+def test_walk_project_skips_file_when_stat_raises_filenotfounderror(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("x = 1\n")
+    original_stat = Path.stat
+
+    def _raise_for_target(self: Path, **kwargs: object) -> object:
+        if self.name == "app.py":
+            raise FileNotFoundError("vanished")
+        return original_stat(self, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "stat", _raise_for_target)
+    result = walk_project(tmp_path)
+    assert isinstance(result, Right)
+    assert not any(walked.path == "app.py" for walked in result.value)
+
+
+def test_walk_project_skips_file_when_read_bytes_raises_filenotfounderror(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "app.py").write_text("x = 1\n")
+    original_read = Path.read_bytes
+
+    def _raise_for_target(self: Path) -> bytes:
+        if self.name == "app.py":
+            raise FileNotFoundError("vanished")
+        return original_read(self)
+
+    monkeypatch.setattr(Path, "read_bytes", _raise_for_target)
+    result = walk_project(tmp_path)
+    assert isinstance(result, Right)
+    assert not any(walked.path == "app.py" for walked in result.value)

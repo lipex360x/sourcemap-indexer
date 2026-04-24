@@ -81,30 +81,33 @@ def _walk_file(
     if spec.match_file(str(relative)):
         return None
     language = detect_language(file_path)
-    file_stat = file_path.stat()
-    mtime = int(file_stat.st_mtime)
-    size_bytes = file_stat.st_size
-    path_str = str(relative)
-    cached = known.get(path_str)
-    if cached is not None and cached[0] == mtime and cached[1] == size_bytes:
+    try:
+        file_stat = file_path.stat()
+        mtime = int(file_stat.st_mtime)
+        size_bytes = file_stat.st_size
+        path_str = str(relative)
+        cached = known.get(path_str)
+        if cached is not None and cached[0] == mtime and cached[1] == size_bytes:
+            return WalkedFile(
+                path=path_str,
+                language=language,
+                lines=cached[2],
+                size_bytes=size_bytes,
+                content_hash=ContentHash(cached[3]),
+                last_modified=mtime,
+            )
+        data = file_path.read_bytes()
+        lines = _count_lines(data) if language != Language.OTHER else 0
         return WalkedFile(
             path=path_str,
             language=language,
-            lines=cached[2],
-            size_bytes=size_bytes,
-            content_hash=ContentHash(cached[3]),
+            lines=lines,
+            size_bytes=len(data),
+            content_hash=hash_content(data),
             last_modified=mtime,
         )
-    data = file_path.read_bytes()
-    lines = _count_lines(data) if language != Language.OTHER else 0
-    return WalkedFile(
-        path=path_str,
-        language=language,
-        lines=lines,
-        size_bytes=len(data),
-        content_hash=hash_content(data),
-        last_modified=mtime,
-    )
+    except OSError:
+        return None
 
 
 def walk_project(
