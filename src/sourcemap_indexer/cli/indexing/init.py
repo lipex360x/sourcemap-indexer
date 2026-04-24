@@ -4,7 +4,7 @@ import typer
 
 from sourcemap_indexer.cli._shared import _DEFAULT_SOURCEMAPIGNORE, _resolve_root, app
 from sourcemap_indexer.config import db_path, maps_dir
-from sourcemap_indexer.infra.migrator import init_db
+from sourcemap_indexer.infra.db.migrator import init_db
 from sourcemap_indexer.lib.either import Left
 
 _LAYERS_YAML_TEMPLATE = (

@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 
 from sourcemap_indexer.domain.value_objects import ContentHash
-from sourcemap_indexer.infra.hasher import hash_content, hash_file
+from sourcemap_indexer.infra.fs.hasher import hash_content, hash_file
 from sourcemap_indexer.lib.either import Left, Right
 
 

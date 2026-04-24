@@ -48,6 +48,7 @@ Critical rules for this project:
 - Max line length: 100 chars
 - `Either[str, T]` for functions that can fail — return `left("error-token")` or `right(value)`
 - Logger: `from sourcemap_indexer.lib.log import create_logger`
+- `SOURCEMAP_LOG_FILE=1` enables file logging (default off); `SOURCEMAP_DEBUG=1` enables debug level
 
 ## Walk command flow
 

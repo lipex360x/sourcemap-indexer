@@ -9,7 +9,7 @@ from sourcemap_indexer.lib.either import Either, left, right
 
 
 def _load_migration(name: str) -> str:
-    package = importlib.resources.files("sourcemap_indexer.infra.migrations")
+    package = importlib.resources.files("sourcemap_indexer.infra.db.migrations")
     return (package / name).read_text(encoding="utf-8")
 
 

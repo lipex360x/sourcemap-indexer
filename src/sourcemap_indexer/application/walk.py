@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from sourcemap_indexer.infra.walker import walk_project
+from sourcemap_indexer.infra.fs.walker import walk_project
 from sourcemap_indexer.lib.either import Either, Left, left, right
 
 

@@ -10,8 +10,8 @@ Mirrors the contract of src/extensions/logger/index.ts:
     logger.clear()
 
 Environment:
-    NO_LOG_FILE=1   suppress all file I/O (use in tests / pre-commit)
-    DEBUG=1         write DEBUG lines + echo every line to stderr
+    SOURCEMAP_LOG_FILE=1   write log to file (default: 0, opt-in)
+    SOURCEMAP_DEBUG=1      write DEBUG lines + echo every line to stderr
 """
 
 from __future__ import annotations
@@ -120,10 +120,10 @@ def create_logger(
     """
     resolved_env = environ if environ is not None else dict(os.environ)
 
-    if resolved_env.get("NO_LOG_FILE") == "1":
+    if resolved_env.get("SOURCEMAP_LOG_FILE") != "1":
         return _NoopLogger()
 
-    debug_enabled = resolved_env.get("DEBUG") == "1"
+    debug_enabled = resolved_env.get("SOURCEMAP_DEBUG") == "1"
 
     if log_dir is not None:
         resolved_dir = Path(log_dir)

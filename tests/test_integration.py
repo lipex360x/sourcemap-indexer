@@ -134,9 +134,9 @@ def test_with_context_enriched_import_appears_in_prompt(tmp_path: Path) -> None:
         Language,
         Stability,
     )
-    from sourcemap_indexer.infra.llm_client import EnrichmentResult  # noqa: PLC0415
-    from sourcemap_indexer.infra.migrator import init_db  # noqa: PLC0415
-    from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository  # noqa: PLC0415
+    from sourcemap_indexer.infra.db.migrator import init_db  # noqa: PLC0415
+    from sourcemap_indexer.infra.db.sqlite_repo import SqliteItemRepository  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.llm_client import EnrichmentResult  # noqa: PLC0415
     from sourcemap_indexer.lib.either import Either, Right  # noqa: PLC0415
 
     db_result = init_db(Path(":memory:"))
@@ -230,9 +230,9 @@ def test_with_context_false_no_context_in_prompt(tmp_path: Path) -> None:
         Language,
         Stability,
     )
-    from sourcemap_indexer.infra.llm_client import EnrichmentResult  # noqa: PLC0415
-    from sourcemap_indexer.infra.migrator import init_db  # noqa: PLC0415
-    from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository  # noqa: PLC0415
+    from sourcemap_indexer.infra.db.migrator import init_db  # noqa: PLC0415
+    from sourcemap_indexer.infra.db.sqlite_repo import SqliteItemRepository  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.llm_client import EnrichmentResult  # noqa: PLC0415
     from sourcemap_indexer.lib.either import Either, Right  # noqa: PLC0415
 
     db_result = init_db(Path(":memory:"))
@@ -294,9 +294,9 @@ def test_topo_order_single_pass_context(tmp_path: Path) -> None:
         Language,
         Stability,
     )
-    from sourcemap_indexer.infra.llm_client import EnrichmentResult  # noqa: PLC0415
-    from sourcemap_indexer.infra.migrator import init_db  # noqa: PLC0415
-    from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository  # noqa: PLC0415
+    from sourcemap_indexer.infra.db.migrator import init_db  # noqa: PLC0415
+    from sourcemap_indexer.infra.db.sqlite_repo import SqliteItemRepository  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.llm_client import EnrichmentResult  # noqa: PLC0415
     from sourcemap_indexer.lib.either import Either, Right  # noqa: PLC0415
 
     db_result = init_db(Path(":memory:"))

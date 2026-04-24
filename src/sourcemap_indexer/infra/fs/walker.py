@@ -6,8 +6,8 @@ from pathlib import Path
 import pathspec
 
 from sourcemap_indexer.domain.value_objects import ContentHash, Language
-from sourcemap_indexer.infra.default_ignore import DEFAULT_IGNORE
-from sourcemap_indexer.infra.hasher import hash_content
+from sourcemap_indexer.infra.fs.default_ignore import DEFAULT_IGNORE
+from sourcemap_indexer.infra.fs.hasher import hash_content
 from sourcemap_indexer.lib.either import Either, Left, left, right
 
 _EXT_MAP: dict[str, Language] = {

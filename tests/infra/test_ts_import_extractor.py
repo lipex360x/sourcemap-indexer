@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sourcemap_indexer.domain.value_objects import Language
-from sourcemap_indexer.infra.import_extractor import _EXTRACTORS, TypeScriptImportExtractor
+from sourcemap_indexer.infra.parser.import_extractor import _EXTRACTORS, TypeScriptImportExtractor
 
 _EXTS = (".ts", ".tsx", ".js", ".jsx")
 _INDEX = ("/index.ts", "/index.tsx")

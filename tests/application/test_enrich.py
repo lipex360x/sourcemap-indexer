@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+import pytest
+
 from sourcemap_indexer.application.enrich import EnrichReport, run_enrich
 from sourcemap_indexer.domain.entities import Item
 from sourcemap_indexer.domain.value_objects import (
@@ -11,10 +13,10 @@ from sourcemap_indexer.domain.value_objects import (
     Language,
     Stability,
 )
-from sourcemap_indexer.infra.llm_client import EnrichmentResult
-from sourcemap_indexer.infra.migrator import init_db
-from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
-from sourcemap_indexer.lib.either import Either, Right, left, right
+from sourcemap_indexer.infra.db.migrator import init_db
+from sourcemap_indexer.infra.db.sqlite_repo import SqliteItemRepository
+from sourcemap_indexer.infra.llm.llm_client import EnrichmentResult
+from sourcemap_indexer.lib.either import Either, Left, Right, left, right
 
 
 def _make_repo() -> SqliteItemRepository:
@@ -515,3 +517,48 @@ def test_with_context_false_passes_none_import_context_to_client(tmp_path: Path)
     run_enrich(tmp_path, repo, client, with_context=False)  # type: ignore[arg-type]
     assert len(client.calls) == 1
     assert client.calls[0]["import_context"] is None
+
+
+def test_enrich_returns_left_when_find_needs_llm_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    repo = _make_repo()
+    monkeypatch.setattr(repo, "find_needs_llm", lambda **_kw: mk_left("db-error"))
+    client = _stub(right(_VALID_RESULT))
+    result = run_enrich(tmp_path, repo, client)  # type: ignore[arg-type]
+    assert isinstance(result, Left)
+    assert "db-error" in result.error
+
+
+def test_enrich_empty_file_upsert_failure_marks_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    repo = _make_repo()
+    item = _make_empty_item("empty.py", tmp_path)
+    (tmp_path / "empty.py").write_bytes(b"")
+    repo.upsert(item)
+    monkeypatch.setattr(repo, "upsert", lambda _it: mk_left("upsert-failed"))
+    client = _stub(right(_VALID_RESULT))
+    result = run_enrich(tmp_path, repo, client)  # type: ignore[arg-type]
+    assert isinstance(result, Right)
+    assert result.value.failed == 1
+
+
+def test_enrich_normal_file_upsert_failure_marks_failed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    repo = _make_repo()
+    item = _make_item("app.py", tmp_path)
+    (tmp_path / "app.py").write_text("x = 1\n")
+    repo.upsert(item)
+    monkeypatch.setattr(repo, "upsert", lambda _it: mk_left("upsert-failed"))
+    client = _stub(right(_VALID_RESULT))
+    result = run_enrich(tmp_path, repo, client)  # type: ignore[arg-type]
+    assert isinstance(result, Right)
+    assert result.value.failed == 1

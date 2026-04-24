@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sourcemap_indexer.infra.layers_config import load_user_layers
+from sourcemap_indexer.infra.config.layers_config import load_user_layers
 from sourcemap_indexer.lib.either import Left, Right
 
 
@@ -45,3 +45,17 @@ def test_layers_values_are_strings(tmp_path: Path) -> None:
     result = load_user_layers(tmp_path)
     assert isinstance(result, Right)
     assert all(isinstance(layer, str) for layer in result.value)
+
+
+def test_non_dict_yaml_returns_empty_set(tmp_path: Path) -> None:
+    (tmp_path / "layers.yaml").write_text("- item1\n- item2\n")
+    result = load_user_layers(tmp_path)
+    assert isinstance(result, Right)
+    assert result.value == frozenset()
+
+
+def test_layers_key_not_a_list_returns_empty_set(tmp_path: Path) -> None:
+    (tmp_path / "layers.yaml").write_text("layers: not-a-list\n")
+    result = load_user_layers(tmp_path)
+    assert isinstance(result, Right)
+    assert result.value == frozenset()

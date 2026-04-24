@@ -375,7 +375,7 @@ Constraints: depth 1 only (no transitive traversal); context is capped at 2000 c
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SOURCEMAP_LLM_PROVIDER` | `http` | LLM backend — `http` (OpenAI-compatible HTTP server) or `claude-cli` (Claude.ai subscription via `claude -p`) |
+| `SOURCEMAP_LLM_PROVIDER` | `http` | LLM backend — `http` (OpenAI-compatible HTTP server), `claude-cli` (Claude.ai subscription via `claude -p`), or `opencode` (OpenCode CLI via `opencode run`) |
 | `SOURCEMAP_LLM_URL` | _(required for `http`)_ | LLM endpoint (any OpenAI-compatible API) — `enrich` is blocked until this is set when using `http` provider |
 | `SOURCEMAP_LLM_MODEL` | _(required for `http`)_ | Model name passed to the endpoint — `enrich` is blocked until this is set when using `http` provider |
 | `SOURCEMAP_LLM_CLI_MODEL` | _(default model)_ | Claude model used by `claude-cli` provider — e.g. `claude-haiku-4-5-20251001`, `claude-sonnet-4-6`, `claude-opus-4-7`. Omit to use Claude's default |
@@ -428,6 +428,36 @@ export SOURCEMAP_LLM_CLI_MODEL=claude-sonnet-4-6
 # Effort / thinking budget (omit to use Claude's default)
 # Values: low | medium | high | xhigh | max
 export SOURCEMAP_LLM_CLI_EFFORT=high
+```
+
+**Run:**
+
+```bash
+sourcemap enrich --limit 10
+```
+
+### Using `opencode` provider
+
+> [!NOTE]
+> The `opencode` provider runs via `opencode run` (OpenCode CLI). It requires [OpenCode](https://opencode.ai) to be installed and configured with at least one model provider.
+
+If you use OpenCode as your AI coding assistant, you can drive enrichment through it directly — no API key or Claude subscription required. When `SOURCEMAP_LLM_PROVIDER=opencode`, the `SOURCEMAP_LLM_URL`, `SOURCEMAP_LLM_MODEL`, `SOURCEMAP_LLM_API_KEY`, and `SOURCEMAP_LLM_CLI_EFFORT` variables are ignored.
+
+**Setup:**
+
+```bash
+# 1. Install OpenCode
+npm install -g opencode-ai
+
+# 2. Set the provider
+export SOURCEMAP_LLM_PROVIDER=opencode
+```
+
+**Optional — pin a specific model:**
+
+```bash
+# Any model ID recognised by your OpenCode config (e.g. anthropic/claude-sonnet-4-6)
+export SOURCEMAP_LLM_CLI_MODEL=anthropic/claude-sonnet-4-6
 ```
 
 **Run:**

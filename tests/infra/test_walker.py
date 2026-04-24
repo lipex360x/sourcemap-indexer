@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from sourcemap_indexer.domain.value_objects import Language
-from sourcemap_indexer.infra.walker import (
+from sourcemap_indexer.infra.fs.walker import (
     WalkedFile,
     detect_language,
     load_ignore_patterns,
@@ -386,3 +386,15 @@ def test_load_ignore_config_dir_wins_over_root_sourcemapignore(tmp_path: Path) -
     spec = result.value
     assert spec.match_file("new-pattern/file.py")
     assert not spec.match_file("old-pattern/file.py")
+
+
+def test_walk_project_returns_left_on_permission_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _raise_permission(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError("access denied")
+
+    monkeypatch.setattr(Path, "rglob", _raise_permission)
+    result = walk_project(tmp_path)
+    assert isinstance(result, Left)
+    assert "walk-error" in result.error

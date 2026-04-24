@@ -241,6 +241,7 @@ class LlmClient:
         language: Language,
         messages: list[dict[str, str]],
     ) -> Either[str, EnrichmentResult]:
+        last: Either[str, EnrichmentResult] = left("llm-parse-error")
         for attempt in range(2):
             post_result = self._post_with_json_fallback(body)
             if isinstance(post_result, Left):
@@ -254,9 +255,8 @@ class LlmClient:
             if attempt == 0:
                 continue
             self._log(path, language, messages, parsed.error, raw, finish_reason)
-            return parsed
-        self._log(path, language, messages, "llm-parse-error")
-        return left("llm-parse-error")
+            last = parsed
+        return last
 
     def enrich(
         self,
