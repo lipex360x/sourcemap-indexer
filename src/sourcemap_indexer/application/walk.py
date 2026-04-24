@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import os
 import time
 from pathlib import Path
 
@@ -50,9 +52,13 @@ def run_walk(
             for file in walked
         ],
     }
+    temp_path = output_path.with_suffix(".yaml.tmp")
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(yaml.dump(index, allow_unicode=True), encoding="utf-8")
+        temp_path.write_text(yaml.dump(index, allow_unicode=True), encoding="utf-8")
+        os.replace(temp_path, output_path)
     except OSError as error:
+        with contextlib.suppress(OSError):
+            temp_path.unlink(missing_ok=True)
         return left(f"write-error: {error}")
     return right(len(walked))
