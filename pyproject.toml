@@ -62,7 +62,7 @@ python_version = "3.11"
 cache_dir = ".mypy_cache"
 
 [tool.pytest.ini_options]
-addopts = "--cov=sourcemap_indexer --cov-report=term-missing --cov-fail-under=95"
+addopts = "--cov=sourcemap_indexer --cov-report=term-missing --cov-fail-under=100"
 testpaths = ["tests"]
 pythonpath = ["src"]
 cache_dir = ".pytest_cache"

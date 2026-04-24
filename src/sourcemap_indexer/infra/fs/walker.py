@@ -41,11 +41,17 @@ def detect_language(path: Path) -> Language:
 
 def _resolve_sourcemapignore(root: Path, sourcemap_dir: Path | None) -> Path | None:
     config_ignore = (sourcemap_dir / "ignore") if sourcemap_dir else None
-    if config_ignore is not None and config_ignore.exists():
-        return config_ignore
+    try:
+        if config_ignore is not None and config_ignore.exists():
+            return config_ignore
+    except OSError:
+        pass
     root_sourcemapignore = root / ".sourcemapignore"
-    if root_sourcemapignore.exists():
-        return root_sourcemapignore
+    try:
+        if root_sourcemapignore.exists():
+            return root_sourcemapignore
+    except OSError:
+        pass
     return None
 
 
@@ -75,13 +81,13 @@ def _walk_file(
     spec: pathspec.PathSpec,
     known: dict[str, tuple[int, int, int, str]],
 ) -> WalkedFile | None:
-    if not file_path.is_file() or file_path.is_symlink():
-        return None
-    relative = file_path.relative_to(root)
-    if spec.match_file(str(relative)):
-        return None
-    language = detect_language(file_path)
     try:
+        if not file_path.is_file() or file_path.is_symlink():
+            return None
+        relative = file_path.relative_to(root)
+        if spec.match_file(str(relative)):
+            return None
+        language = detect_language(file_path)
         file_stat = file_path.stat()
         mtime = int(file_stat.st_mtime)
         size_bytes = file_stat.st_size

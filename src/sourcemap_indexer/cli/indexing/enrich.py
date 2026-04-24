@@ -185,7 +185,7 @@ def _build_enrich_header(
 ) -> str:
     parts = _build_provider_lines(config, provider_name, cli_model, cli_effort)
     if import_path is not None:
-        parts.append(f"[bold]Prompt[/bold]  {import_path}")
+        parts.append(f"[bold]Prompt[/bold]  {import_path.name}")
     if message:
         parts.append(f"[bold]Instruction[/bold]  {message}")
     return "\n".join(parts)

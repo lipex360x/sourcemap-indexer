@@ -432,3 +432,35 @@ def test_walk_project_skips_file_when_read_bytes_raises_filenotfounderror(
     result = walk_project(tmp_path)
     assert isinstance(result, Right)
     assert not any(walked.path == "app.py" for walked in result.value)
+
+
+def test_load_ignore_config_exists_oserror_falls_through(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = tmp_path / ".sourcemap"
+    config.mkdir()
+    original_exists = Path.exists
+
+    def _raise_for_ignore(self: Path) -> bool:
+        if self.name == "ignore" and self.parent == config:
+            raise PermissionError("access denied")
+        return original_exists(self)
+
+    monkeypatch.setattr(Path, "exists", _raise_for_ignore)
+    result = load_ignore_patterns(tmp_path, sourcemap_dir=config)
+    assert isinstance(result, Right)
+
+
+def test_load_ignore_root_sourcemapignore_exists_oserror_falls_through(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    original_exists = Path.exists
+
+    def _raise_for_sourcemapignore(self: Path) -> bool:
+        if self.name == ".sourcemapignore":
+            raise PermissionError("access denied")
+        return original_exists(self)
+
+    monkeypatch.setattr(Path, "exists", _raise_for_sourcemapignore)
+    result = load_ignore_patterns(tmp_path)
+    assert isinstance(result, Right)
