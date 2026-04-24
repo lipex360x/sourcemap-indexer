@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: ruff check
+        run: uv run ruff check src/ tests/
+
+      - name: ruff format
+        run: uv run ruff format --check src/ tests/
+
+      - name: mypy
+        run: uv run mypy --strict src/sourcemap_indexer/
+
+      - name: vulture
+        run: uv run vulture src/sourcemap_indexer/ tests/ --min-confidence 80 --exclude "*repository*"
+
+      - name: bandit
+        run: uv run bandit -r src/ -c pyproject.toml -q
+
+      - name: pylint
+        run: uv run pylint src/ tests/ --disable=all --enable=C0103 --rcfile=pyproject.toml
+
+      - name: pytest
+        run: uv run pytest
