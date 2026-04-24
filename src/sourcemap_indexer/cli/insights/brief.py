@@ -51,8 +51,15 @@ _SQL_ENRICHMENT_GAP = (
     "WHERE stability = 'unknown' AND needs_llm = 0 AND deleted_at IS NULL "
     "ORDER BY path"
 )
+_SQL_FILES_BY_LAYER = (
+    "SELECT layer, path, purpose FROM items "
+    "WHERE needs_llm = 0 AND deleted_at IS NULL AND purpose IS NOT NULL "
+    "ORDER BY layer, path"
+)
 
-_SEP = "─" * 56
+_SEPARATOR_WIDTH = 56
+_SEP = "─" * _SEPARATOR_WIDTH
+_INVARIANTS_PER_CONTRACT = 3
 
 
 def _section(title: str) -> None:
@@ -137,7 +144,7 @@ def _group_contracts(rows: list[sqlite3.Row]) -> dict[tuple[str, str], list[str]
         key = (row["layer"], row["name"])
         if key not in result:
             result[key] = []
-        if len(result[key]) < 3:
+        if len(result[key]) < _INVARIANTS_PER_CONTRACT:
             result[key].append(row["invariant"])
     return result
 
@@ -171,8 +178,28 @@ def _print_risk(conn: sqlite3.Connection) -> None:
         _print_risk_row("enrichment-gap", row["path"], row["purpose"])
 
 
+def _print_files_by_layer(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(_SQL_FILES_BY_LAYER).fetchall()  # noqa: S608
+    if not rows:
+        typer.echo("  no enriched data")
+        return
+    current_layer = ""
+    for row in rows:
+        if row["layer"] != current_layer:
+            current_layer = row["layer"]
+            typer.echo(f"  {current_layer}/")
+        typer.echo(f"    {row['path']}")
+        typer.echo(f"      {row['purpose']}")
+
+
+_VERBOSE_HELP = "Expand Files by layer: list every enriched file with its 1-line purpose."
+
+
 @app.command(help="Single-call project briefing for AI-assisted discovery.")
-def brief(root: str | None = typer.Option(None, help="Project root")) -> None:
+def brief(
+    root: str | None = typer.Option(None, help="Project root"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help=_VERBOSE_HELP),
+) -> None:
     project_root = _resolve_root(root)
     db_file = db_path(project_root)
     if not db_file.exists():
@@ -204,5 +231,8 @@ def brief(root: str | None = typer.Option(None, help="Project root")) -> None:
         _print_contracts(conn)
         _section("Risk Areas")
         _print_risk(conn)
+        if verbose:
+            _section("Files by layer")
+            _print_files_by_layer(conn)
     finally:
         conn.close()

@@ -53,6 +53,7 @@ Query the local SQLite index built by sourcemap-indexer to understand any projec
 | Command | When to use |
 |---------|-------------|
 | `sourcemap brief` | **Project discovery** — project metadata (when `project.yaml` exists), totals, architecture, domain files, I/O boundaries, vocabulary, risk areas in one shot |
+| `sourcemap brief --verbose` (or `-v`) | Same as `brief` plus a **Files by layer** section listing every enriched file with its 1-line `purpose`, grouped by layer. Use when aggregate counts are not enough to locate a concept — especially on documentation-heavy projects where most files live in support layers |
 | `sourcemap chapters [--layer L]` | Table of contents — enriched files grouped by layer and sorted by path. Ideal for documentation-heavy projects |
 | `sourcemap contracts [--layer L]` | Invariants grouped by layer and file — the semantic contracts captured during enrichment. Use this instead of `brief` to read every invariant |
 | `sourcemap enrich [--limit N]` | Run LLM enrichment on pending files. Provider selected via `SOURCEMAP_LLM_PROVIDER` (`http` default, or `claude-cli` for Claude subscription) |
@@ -141,6 +142,8 @@ sourcemap brief
 ```
 
 Output sections: totals, Architecture (layer × language matrix), Domain (top enriched domain files with purpose), I/O Boundaries (side effects by count), Vocabulary (top 15 tags), Risk Areas (experimental/deprecated files).
+
+If the default sections do not surface the concept the user is looking for — typical when most files live in support layers (e.g. `stacks`, `foundations`, `enforcement` on documentation-heavy projects) — re-run with `--verbose` to expand a **Files by layer** section that lists every enriched file with its `purpose`, grouped by layer.
 
 Synthesize a markdown summary from this single output: what the project does, its layers, key domain concepts, and I/O boundaries.
 

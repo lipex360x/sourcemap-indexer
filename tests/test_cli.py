@@ -814,6 +814,80 @@ def test_brief_fails_on_malformed_project_yaml(tmp_path: Path) -> None:
     assert "project-yaml-invalid" in result.output
 
 
+def _seed_verbose_db(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'stacks/python.yaml', 'python.yaml', 'yaml', 'stacks', 'stable', "
+        "'Python 3.11+ mapping', 50, 500, 'abc', 0, 0, 0)"
+    )
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (2, 'enforcement/03-tools.yaml', '03-tools.yaml', 'yaml', "
+        "'enforcement', 'stable', 'Tool categories', 60, 600, 'def', 0, 0, 0)"
+    )
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (3, 'unfinished.md', 'unfinished.md', 'md', 'doc', 'unknown', "
+        "NULL, 10, 100, 'ghi', 1, 0, 0)"
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_brief_verbose_lists_files_by_layer(tmp_path: Path) -> None:
+    _seed_verbose_db(tmp_path)
+    result = runner.invoke(app, ["brief", "--verbose", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Files by layer" in result.output
+    assert "stacks/python.yaml" in result.output
+    assert "Python 3.11+ mapping" in result.output
+    assert "enforcement/03-tools.yaml" in result.output
+    assert "Tool categories" in result.output
+
+
+def test_brief_verbose_short_flag(tmp_path: Path) -> None:
+    _seed_verbose_db(tmp_path)
+    result = runner.invoke(app, ["brief", "-v", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Files by layer" in result.output
+
+
+def test_brief_default_hides_verbose_section(tmp_path: Path) -> None:
+    _seed_verbose_db(tmp_path)
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Files by layer" not in result.output
+
+
+def test_brief_verbose_skips_unenriched_items(tmp_path: Path) -> None:
+    _seed_verbose_db(tmp_path)
+    result = runner.invoke(app, ["brief", "--verbose", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "unfinished.md" not in result.output
+
+
+def test_brief_verbose_groups_layer_header(tmp_path: Path) -> None:
+    _seed_verbose_db(tmp_path)
+    result = runner.invoke(app, ["brief", "--verbose", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "stacks/" in result.output
+    assert "enforcement/" in result.output
+
+
+def test_brief_verbose_empty_when_no_enriched(tmp_path: Path) -> None:
+    _init_sync(tmp_path)
+    result = runner.invoke(app, ["brief", "--verbose", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "Files by layer" in result.output
+    assert "no enriched data" in result.output
+
+
 def _seed_contracts_db(tmp_path: Path) -> None:
     db_file = tmp_path / ".sourcemap" / "index.db"
     runner.invoke(app, ["init", "--root", str(tmp_path)])

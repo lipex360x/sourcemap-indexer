@@ -59,12 +59,16 @@ class _HeartbeatColumn(ProgressColumn):
         peak = phase * (self._N + 4) - 2
         return max(0.0, 1.0 - abs(peak - dot) / 3.0)
 
+    _OFF_THRESHOLD = 0.01
+    _DIM_THRESHOLD = 0.40
+    _MID_THRESHOLD = 0.70
+
     def _color(self, brightness: float) -> str:
-        if brightness < 0.01:
+        if brightness < self._OFF_THRESHOLD:
             return "grey42"
-        if brightness < 0.40:
+        if brightness < self._DIM_THRESHOLD:
             return "#885500"
-        if brightness < 0.70:
+        if brightness < self._MID_THRESHOLD:
             return "#cc8800"
         return "#ffcc00"
 

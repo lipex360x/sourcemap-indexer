@@ -46,13 +46,14 @@ FROM items WHERE deleted_at IS NULL
 _SQL_PROFILE_TOP = (
     "SELECT path, language, lines FROM items WHERE deleted_at IS NULL ORDER BY lines DESC LIMIT 10"
 )
+_HEALTHY_TEST_RATIO = 0.8
 
 
 def _print_test_ratio(conn: sqlite3.Connection) -> None:
     row = conn.execute(_SQL_PROFILE_RATIO).fetchone()  # noqa: S608
     if row and row["src_files"]:
         ratio = round(row["test_lines"] / row["src_lines"], 2) if row["src_lines"] else 0
-        health = "healthy" if ratio >= 0.8 else "low"
+        health = "healthy" if ratio >= _HEALTHY_TEST_RATIO else "low"
         typer.echo(f"  Source  {row['src_files']:>4} files  {row['src_lines']:>6} lines")
         typer.echo(
             f"  Tests   {row['test_files']:>4} files  {row['test_lines']:>6} lines"

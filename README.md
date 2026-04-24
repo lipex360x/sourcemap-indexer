@@ -323,6 +323,7 @@ Constraints: depth 1 only (no transitive traversal); context is capped at 2000 c
 | Command | Description |
 |---------|-------------|
 | `brief` | Single-call project briefing — architecture, domain files, tags, side effects, risk areas (includes project metadata when `.sourcemap/project.yaml` is present) |
+| `brief --verbose` (or `-v`) | Same as `brief` plus a **Files by layer** section listing every enriched file with its 1-line `purpose`, grouped by layer — use when aggregate counts hide the concept you are looking for (common on documentation-heavy projects) |
 | `chapters` | Table of contents — enriched files grouped by layer and sorted by path (ideal for documentation-heavy projects) |
 | `contracts` | Invariants grouped by layer and file — the semantic contracts captured during enrichment |
 | `profile` | Language distribution, inferred layers, test ratio, top files by size |

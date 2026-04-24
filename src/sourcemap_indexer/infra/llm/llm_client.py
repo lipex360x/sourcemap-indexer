@@ -5,6 +5,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any
 
 import httpx
@@ -207,7 +208,7 @@ class LlmClient:
             return left("llm-timeout")
         except httpx.RequestError as error:
             return left(f"llm-request-error: {error}")
-        if response.status_code != 200:
+        if response.status_code != HTTPStatus.OK:
             return left(f"llm-http-error: {response.status_code}")
         try:
             choice = response.json()["choices"][0]

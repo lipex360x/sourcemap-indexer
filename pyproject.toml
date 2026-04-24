@@ -48,11 +48,11 @@ cache-dir = ".ruff_cache"
 extend-exclude = [".semgrep/"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "RET", "C90", "S"]
+select = ["E", "F", "I", "UP", "B", "SIM", "RET", "C90", "S", "PLR2004"]
 ignore = ["S603", "S607", "S608"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101"]
+"tests/**/*.py" = ["S101", "PLR2004"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 5
