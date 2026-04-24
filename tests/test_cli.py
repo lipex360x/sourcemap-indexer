@@ -865,11 +865,41 @@ def test_brief_default_hides_verbose_section(tmp_path: Path) -> None:
     assert "Files by layer" not in result.output
 
 
-def test_brief_verbose_skips_unenriched_items(tmp_path: Path) -> None:
-    _seed_verbose_db(tmp_path)
+def test_brief_verbose_lists_pending_with_stale_purpose(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'stacks/python.yaml', 'python.yaml', 'yaml', 'stacks', 'stable', "
+        "'Python stack config', 50, 500, 'abc', 1, 0, 0)"
+    )
+    conn.commit()
+    conn.close()
     result = runner.invoke(app, ["brief", "--verbose", "--root", str(tmp_path)])
     assert result.exit_code == 0
-    assert "unfinished.md" not in result.output
+    assert "stacks/python.yaml" in result.output
+    assert "[pending]" in result.output
+    assert "Python stack config" in result.output
+
+
+def test_brief_verbose_lists_pending_without_purpose(tmp_path: Path) -> None:
+    db_file = tmp_path / ".sourcemap" / "index.db"
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    conn = sqlite3.connect(str(db_file))
+    conn.execute(
+        "INSERT INTO items (id, path, name, language, layer, stability, purpose, "
+        "lines, size_bytes, content_hash, needs_llm, created_at, updated_at) "
+        "VALUES (1, 'stacks/new.yaml', 'new.yaml', 'yaml', 'stacks', 'unknown', "
+        "NULL, 10, 100, 'ghi', 1, 0, 0)"
+    )
+    conn.commit()
+    conn.close()
+    result = runner.invoke(app, ["brief", "--verbose", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "stacks/new.yaml" in result.output
+    assert "[pending]" in result.output
 
 
 def test_brief_verbose_groups_layer_header(tmp_path: Path) -> None:
@@ -880,8 +910,8 @@ def test_brief_verbose_groups_layer_header(tmp_path: Path) -> None:
     assert "enforcement/" in result.output
 
 
-def test_brief_verbose_empty_when_no_enriched(tmp_path: Path) -> None:
-    _init_sync(tmp_path)
+def test_brief_verbose_empty_when_no_items(tmp_path: Path) -> None:
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
     result = runner.invoke(app, ["brief", "--verbose", "--root", str(tmp_path)])
     assert result.exit_code == 0
     assert "Files by layer" in result.output

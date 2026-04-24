@@ -52,8 +52,8 @@ _SQL_ENRICHMENT_GAP = (
     "ORDER BY path"
 )
 _SQL_FILES_BY_LAYER = (
-    "SELECT layer, path, purpose FROM items "
-    "WHERE needs_llm = 0 AND deleted_at IS NULL AND purpose IS NOT NULL "
+    "SELECT layer, path, purpose, needs_llm FROM items "
+    "WHERE deleted_at IS NULL AND (purpose IS NOT NULL OR needs_llm = 1) "
     "ORDER BY layer, path"
 )
 
@@ -188,8 +188,10 @@ def _print_files_by_layer(conn: sqlite3.Connection) -> None:
         if row["layer"] != current_layer:
             current_layer = row["layer"]
             typer.echo(f"  {current_layer}/")
-        typer.echo(f"    {row['path']}")
-        typer.echo(f"      {row['purpose']}")
+        suffix = " [pending]" if row["needs_llm"] else ""
+        typer.echo(f"    {row['path']}{suffix}")
+        if row["purpose"]:
+            typer.echo(f"      {row['purpose']}")
 
 
 _VERBOSE_HELP = "Expand Files by layer: list every enriched file with its 1-line purpose."
