@@ -23,12 +23,12 @@ if [[ -n "$staged_py" ]]; then
     src_py=$(echo "$staged_py" | grep '^src/' | grep -v '/lib/' || true)
     if [[ -n "$src_py" ]]; then
         printf "→ mypy\n"
-        echo "$src_py" | NO_LOG_FILE=1 xargs "$VENV/mypy" --strict \
+        echo "$src_py" | xargs "$VENV/mypy" --strict \
             --config-file "$ROOT/pyproject.toml"
     fi
 
     printf "→ vulture\n"
-    NO_LOG_FILE=1 "$VENV/vulture" "$ROOT/src/sourcemap_indexer/" "$ROOT/tests/" \
+    "$VENV/vulture" "$ROOT/src/sourcemap_indexer/" "$ROOT/tests/" \
         --min-confidence 80 --exclude "*repository*"
 
     printf "→ bandit\n"
@@ -39,7 +39,7 @@ if [[ -n "$staged_py" ]]; then
         --rcfile="$ROOT/pyproject.toml"
 
     printf "→ pytest + coverage\n"
-    NO_LOG_FILE=1 "$VENV/pytest" -q
+    "$VENV/pytest" -q
 fi
 
 printf "✓ pre-commit passed\n"

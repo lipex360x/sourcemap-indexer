@@ -136,3 +136,15 @@ def test_run_walk_ignores_output_dir_dynamically(tmp_path: Path) -> None:
     paths = [f["path"] for f in data["files"]]
     assert not any(p.startswith(".myoutput") for p in paths)
     assert "main.py" in paths
+
+
+def test_run_walk_output_outside_root_does_not_add_ignore_pattern(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("x = 1\n")
+    outside_dir = tmp_path.parent / "external_output"
+    outside_dir.mkdir(exist_ok=True)
+    output = outside_dir / "index.yaml"
+    result = run_walk(tmp_path / "src", output)
+    assert isinstance(result, Right)
+    (outside_dir / "index.yaml").unlink(missing_ok=True)
+    outside_dir.rmdir()

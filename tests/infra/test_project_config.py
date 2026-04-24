@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sourcemap_indexer.infra.project_config import ProjectMeta, load_project_meta
+from sourcemap_indexer.infra.config.project_config import ProjectMeta, load_project_meta
 from sourcemap_indexer.lib.either import Left, Right
 
 

@@ -1095,7 +1095,7 @@ def test_enrich_export_llm_prompt_creates_default_md_file(
 def test_enrich_export_llm_prompt_content_matches_system_prompt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from sourcemap_indexer.infra.llm_client import SYSTEM_PROMPT
+    from sourcemap_indexer.infra.llm.llm_client import SYSTEM_PROMPT
 
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
     runner.invoke(app, ["init", "--root", str(tmp_path)])
@@ -1400,3 +1400,267 @@ def test_show_loading_runs_without_error() -> None:
     with patch("time.sleep"):
         result = runner.invoke(app, ["show-loading", "--files", "3"])
     assert result.exit_code == 0
+
+
+def test_open_repo_exits_on_init_db_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    monkeypatch.setattr("sourcemap_indexer.cli._shared.init_db", lambda _p: mk_left("db-error"))
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["walk", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_resolve_root_exits_when_find_project_root_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli._shared.find_project_root", lambda _p: mk_left("no-root")
+    )
+    result = runner.invoke(app, ["walk"])
+    assert result.exit_code != 0
+
+
+def test_load_enrich_context_returns_left_when_layers_config_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.load_user_layers",
+        lambda _p: mk_left("layers-yaml-invalid"),
+    )
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["enrich", "--root", str(tmp_path), "--export-llm-prompt"])
+    assert result.exit_code != 0
+
+
+def test_create_http_client_exits_on_ping_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sourcemap_indexer.cli as cli_module  # noqa: PLC0415
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: mk_left("llm-unreachable"))
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_create_provider_non_http_returns_provider(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.application.enrich import EnrichReport  # noqa: PLC0415
+    from sourcemap_indexer.lib.either import right as mk_right  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "claude-cli")
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_enrich",
+        lambda *_a, **_kw: mk_right(EnrichReport(enriched=0, failed=0, skipped=0, errors=())),
+    )
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/usr/bin/claude")
+    monkeypatch.setattr(
+        subprocess, "run", lambda *_a, **_kw: subprocess.CompletedProcess([], 0, "", "")
+    )
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+
+
+def test_build_enrich_header_shows_instruction_when_message_set() -> None:
+    from sourcemap_indexer.cli.indexing.enrich import _build_enrich_header  # noqa: PLC0415
+
+    result = _build_enrich_header(None, None, "write in English", "claude-cli")
+    assert "Instruction" in result
+    assert "write in English" in result
+
+
+def test_enrich_walk_failure_exits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sourcemap_indexer.cli as cli_module  # noqa: PLC0415
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://test/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: right(None))
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.enrich.run_walk",
+        lambda *_a, **_kw: mk_left("walk-error"),
+    )
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_walk_command_exits_on_sync_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    (tmp_path / "app.py").write_text("x = 1\n")
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.indexing.walk.run_sync",
+        lambda *_a, **_kw: mk_left("sync-failed"),
+    )
+    result = runner.invoke(app, ["walk", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_find_command_exits_on_search_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    monkeypatch.setattr(
+        "sourcemap_indexer.infra.db.sqlite_repo.SqliteItemRepository.search",
+        lambda _self, **_kw: mk_left("db-error"),
+    )
+    result = runner.invoke(app, ["find", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_show_command_exits_on_find_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    monkeypatch.setattr(
+        "sourcemap_indexer.infra.db.sqlite_repo.SqliteItemRepository.find_by_path",
+        lambda _self, _p: mk_left("db-error"),
+    )
+    result = runner.invoke(app, ["show", "app.py", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_stale_command_exits_on_search_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    monkeypatch.setattr(
+        "sourcemap_indexer.infra.db.sqlite_repo.SqliteItemRepository.search",
+        lambda _self, **_kw: mk_left("db-error"),
+    )
+    result = runner.invoke(app, ["stale", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_stats_walk_failure_exits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.insights.stats.run_walk",
+        lambda *_a, **_kw: mk_left("walk-error"),
+    )
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_stats_sync_failure_exits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.insights.stats.run_sync",
+        lambda *_a, **_kw: mk_left("sync-error"),
+    )
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_stats_search_failure_exits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    monkeypatch.setattr(
+        "sourcemap_indexer.infra.db.sqlite_repo.SqliteItemRepository.search",
+        lambda _self, **_kw: mk_left("search-error"),
+    )
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_stats_files_flag_returns_early_when_no_pending(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path), "--files"])
+    assert result.exit_code == 0
+
+
+def test_stats_files_flag_multi_page_shows_navigation_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
+    monkeypatch.setenv("SOURCEMAP_PAGE_SIZE", "1")
+    for idx in range(3):
+        (tmp_path / f"file{idx}.py").write_text(f"x = {idx}\n")
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path), "--files"])
+    assert result.exit_code == 0
+    assert "--page" in result.output
+
+
+def test_brief_structure_shows_no_data_on_empty_db(tmp_path: Path) -> None:
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["brief", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "no data" in result.output
+
+
+def test_profile_no_src_files_shows_fallback(tmp_path: Path) -> None:
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["profile", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "No test files detected" in result.output
+
+
+def test_enrich_exits_on_unknown_provider(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "unknown-xyz")
+    result = runner.invoke(app, ["enrich", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_stats_pending_section_skipped_when_no_pending(tmp_path: Path) -> None:
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["stats", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+
+
+def test_resolve_root_success_returns_value_from_find_project_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import right as mk_right  # noqa: PLC0415
+
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli._shared.find_project_root", lambda _p: mk_right(tmp_path)
+    )
+    result = runner.invoke(app, ["walk"])
+    assert result.exit_code == 0
+
+
+def test_render_pending_files_returns_early_when_empty() -> None:
+    from io import StringIO  # noqa: PLC0415
+
+    from rich.console import Console as _RichConsole  # noqa: PLC0415
+
+    from sourcemap_indexer.cli.insights.stats import _render_pending_files  # noqa: PLC0415
+
+    console = _RichConsole(file=StringIO())
+    _render_pending_files(console, [], 0, 1, 20)

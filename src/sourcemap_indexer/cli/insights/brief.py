@@ -6,7 +6,7 @@ import typer
 
 from sourcemap_indexer.cli._shared import _resolve_root, app
 from sourcemap_indexer.config import db_path, maps_dir
-from sourcemap_indexer.infra.project_config import ProjectMeta, load_project_meta
+from sourcemap_indexer.infra.config.project_config import ProjectMeta, load_project_meta
 from sourcemap_indexer.lib.either import Left
 
 _BEHAVIOR_LAYERS = frozenset({"domain", "application", "infra", "lib"})
@@ -76,7 +76,7 @@ def _print_project(meta: ProjectMeta) -> None:
 def _print_totals(conn: sqlite3.Connection) -> None:
     row = conn.execute(_SQL_TOTALS).fetchone()  # noqa: S608
     total = row["total"] if row else 0
-    enriched = row["enriched"] if row else 0
+    enriched = (row["enriched"] or 0) if row else 0
     pending = total - enriched
     typer.echo(f"  {total} files · {enriched} enriched · {pending} pending")
 

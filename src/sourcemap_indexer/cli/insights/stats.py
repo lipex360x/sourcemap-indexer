@@ -26,8 +26,8 @@ from sourcemap_indexer.config import (
     llm_provider_name,
 )
 from sourcemap_indexer.domain.entities import Item
-from sourcemap_indexer.infra.dotenv import load_dotenv
-from sourcemap_indexer.infra.llm_client import from_environ, is_llm_configured
+from sourcemap_indexer.infra.config.dotenv import load_dotenv
+from sourcemap_indexer.infra.llm.llm_client import from_environ, is_llm_configured
 from sourcemap_indexer.lib.either import Left
 
 

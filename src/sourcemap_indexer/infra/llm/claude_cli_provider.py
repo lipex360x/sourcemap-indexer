@@ -6,7 +6,7 @@ import subprocess
 
 from sourcemap_indexer.config import llm_cli_effort, llm_cli_model
 from sourcemap_indexer.domain.value_objects import Language
-from sourcemap_indexer.infra.llm_client import (
+from sourcemap_indexer.infra.llm.llm_client import (
     SYSTEM_PROMPT,
     EnrichmentResult,
     _parse_enrichment,

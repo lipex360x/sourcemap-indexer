@@ -11,8 +11,8 @@ from sourcemap_indexer.domain.value_objects import (
     SideEffect,
     Stability,
 )
-from sourcemap_indexer.infra.migrator import init_db
-from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
+from sourcemap_indexer.infra.db.migrator import init_db
+from sourcemap_indexer.infra.db.sqlite_repo import SqliteItemRepository
 from sourcemap_indexer.lib.either import Left, Right
 
 
@@ -500,3 +500,16 @@ def test_load_known_files_returns_multiple_items() -> None:
     assert "src/a.py" in result
     assert "src/b.py" in result
     assert "src/c.py" in result
+
+
+def test_load_known_files_returns_empty_on_db_error() -> None:
+
+    from pathlib import Path  # noqa: PLC0415
+
+    result = init_db(Path(":memory:"))
+    assert isinstance(result, Right)
+    connection = result.value
+    connection.close()
+    repo = SqliteItemRepository(connection)
+    known = repo.load_known_files()
+    assert known == {}

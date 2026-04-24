@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sourcemap_indexer.domain.entities import Item
 from sourcemap_indexer.domain.repository import ItemRepository
-from sourcemap_indexer.infra.import_extractor import _EXTRACTORS
+from sourcemap_indexer.infra.parser.import_extractor import _EXTRACTORS
 from sourcemap_indexer.lib.either import Left
 
 

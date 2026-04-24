@@ -11,8 +11,8 @@ from sourcemap_indexer.application.import_context import resolve_import_context
 from sourcemap_indexer.domain.entities import Item
 from sourcemap_indexer.domain.repository import ItemRepository
 from sourcemap_indexer.domain.value_objects import _DEFAULT_LAYERS, Language, Layer, Stability
-from sourcemap_indexer.infra.import_extractor import _EXTRACTORS
-from sourcemap_indexer.infra.llm_client import EnrichmentResult
+from sourcemap_indexer.infra.llm.llm_client import EnrichmentResult
+from sourcemap_indexer.infra.parser.import_extractor import _EXTRACTORS
 from sourcemap_indexer.lib.either import Either, Left, left, right
 
 _CONTEXT_MAX_CHARS = 2000

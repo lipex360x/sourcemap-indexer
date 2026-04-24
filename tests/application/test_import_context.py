@@ -8,8 +8,8 @@ import pytest
 from sourcemap_indexer.application.import_context import resolve_import_context
 from sourcemap_indexer.domain.entities import Item
 from sourcemap_indexer.domain.value_objects import ContentHash, ItemId, Language, Stability
-from sourcemap_indexer.infra.migrator import init_db
-from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
+from sourcemap_indexer.infra.db.migrator import init_db
+from sourcemap_indexer.infra.db.sqlite_repo import SqliteItemRepository
 from sourcemap_indexer.lib.either import Right
 
 
@@ -124,3 +124,23 @@ def test_multiple_enriched_imports_all_appear() -> None:
     assert "mod_two/repo.py" in result
     assert "Utility helpers" in result
     assert "Data access layer" in result
+
+
+def test_repo_find_error_silently_skips_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    repo = _make_repo()
+    monkeypatch.setattr(repo, "find_by_path", lambda _p: mk_left("db-error"))
+    item = _make_item("src/app.py")
+    content = "from my_domain.entity import Entity\n"
+    result = resolve_import_context(item, content, repo, max_chars=5000)
+    assert result == ""
+
+
+def test_budget_too_small_for_first_line_returns_empty() -> None:
+    repo = _make_repo()
+    repo.upsert(_make_enriched_item("mod/entity.py", "A very long purpose " * 10))
+    item = _make_item("src/app.py")
+    content = "from mod.entity import Entity\n"
+    result = resolve_import_context(item, content, repo, max_chars=5)
+    assert result == ""

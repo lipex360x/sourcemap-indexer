@@ -3,11 +3,12 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+import pytest
 import yaml
 
 from sourcemap_indexer.application.sync import SyncReport, run_sync
-from sourcemap_indexer.infra.migrator import init_db
-from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
+from sourcemap_indexer.infra.db.migrator import init_db
+from sourcemap_indexer.infra.db.sqlite_repo import SqliteItemRepository
 from sourcemap_indexer.lib.either import Left, Right
 
 
@@ -215,3 +216,115 @@ def test_sync_on_progress_none_does_not_raise(tmp_path: Path) -> None:
     _write_index(index, [_file_entry("f.py")])
     result = run_sync(index, repo, on_progress=None)
     assert isinstance(result, Right)
+
+
+def test_sync_returns_left_when_insert_upsert_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    repo = _make_repo()
+    monkeypatch.setattr(repo, "upsert", lambda _item: mk_left("upsert-failed"))
+    index = tmp_path / "index.yaml"
+    _write_index(index, [_file_entry("app.py")])
+    result = run_sync(index, repo)
+    assert isinstance(result, Left)
+    assert "upsert-failed" in result.error
+
+
+def test_sync_returns_left_when_update_upsert_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    repo = _make_repo()
+    index = tmp_path / "index.yaml"
+    _write_index(index, [_file_entry("app.py", content_hash="a" * 64)])
+    run_sync(index, repo)
+    monkeypatch.setattr(repo, "upsert", lambda _item: mk_left("upsert-failed"))
+    _write_index(index, [_file_entry("app.py", content_hash="b" * 64)])
+    result = run_sync(index, repo)
+    assert isinstance(result, Left)
+
+
+def test_sync_returns_left_when_find_by_path_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    repo = _make_repo()
+    monkeypatch.setattr(repo, "find_by_path", lambda _p: mk_left("db-error"))
+    index = tmp_path / "index.yaml"
+    _write_index(index, [_file_entry("app.py")])
+    result = run_sync(index, repo)
+    assert isinstance(result, Left)
+    assert "db-error" in result.error
+
+
+def test_sync_returns_left_when_find_all_paths_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    repo = _make_repo()
+    index = tmp_path / "index.yaml"
+    _write_index(index, [_file_entry("app.py")])
+    run_sync(index, repo)
+    monkeypatch.setattr(repo, "find_all_paths", lambda: mk_left("paths-error"))
+    _write_index(index, [_file_entry("other.py")])
+    result = run_sync(index, repo)
+    assert isinstance(result, Left)
+    assert "paths-error" in result.error
+
+
+def test_sync_soft_delete_returns_zero_for_path_not_in_db(tmp_path: Path) -> None:
+    repo = _make_repo()
+    index = tmp_path / "index.yaml"
+    _write_index(index, [_file_entry("a.py"), _file_entry("b.py")])
+    run_sync(index, repo)
+    repo._connection.execute("DELETE FROM items WHERE path = 'b.py'")  # noqa: SLF001
+    repo._connection.commit()  # noqa: SLF001
+    _write_index(index, [_file_entry("a.py")])
+    result = run_sync(index, repo)
+    assert isinstance(result, Right)
+
+
+def test_sync_returns_left_when_soft_delete_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    repo = _make_repo()
+    index = tmp_path / "index.yaml"
+    _write_index(index, [_file_entry("a.py"), _file_entry("b.py")])
+    run_sync(index, repo)
+    monkeypatch.setattr(repo, "soft_delete", lambda _item_id, _now: mk_left("delete-error"))
+    _write_index(index, [_file_entry("a.py")])
+    result = run_sync(index, repo)
+    assert isinstance(result, Left)
+    assert "delete-error" in result.error
+
+
+def test_soft_delete_gone_skips_when_path_not_in_db() -> None:
+    from sourcemap_indexer.application.sync import _soft_delete_gone  # noqa: PLC0415
+
+    class _MockRepo:
+        def find_by_path(self, _path: str) -> Right:
+            return Right(None)
+
+    result = _soft_delete_gone("gone.py", _MockRepo(), int(time.time()))  # type: ignore
+    assert isinstance(result, Right)
+    assert result.value == 0
+
+
+def test_soft_delete_gone_returns_left_when_find_by_path_fails() -> None:
+    from sourcemap_indexer.application.sync import _soft_delete_gone  # noqa: PLC0415
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    class _MockRepo:
+        def find_by_path(self, _path: str) -> Left:
+            return mk_left("db-error")
+
+    result = _soft_delete_gone("gone.py", _MockRepo(), int(time.time()))  # type: ignore
+    assert isinstance(result, Left)
+    assert result.error == "db-error"

@@ -3,7 +3,9 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 
-from sourcemap_indexer.infra.migrator import init_db
+import pytest
+
+from sourcemap_indexer.infra.db.migrator import init_db
 from sourcemap_indexer.lib.either import Left, Right
 
 
@@ -63,6 +65,23 @@ def test_init_db_returns_left_for_invalid_path() -> None:
     result = init_db(Path("/nonexistent_dir/that/does/not/exist/test.db"))
     assert isinstance(result, Left)
     assert result.error.startswith("db-error")
+
+
+def test_apply_pending_rolls_back_on_migration_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sqlite3  # noqa: PLC0415
+
+    import sourcemap_indexer.infra.db.migrator as migrator_mod  # noqa: PLC0415
+
+    def _raise(_conn: object, _name: object) -> None:
+        raise sqlite3.OperationalError("simulated-failure")
+
+    monkeypatch.setattr(migrator_mod, "_run_migration", _raise)
+    db_path = tmp_path / "test.db"
+    result = init_db(db_path)
+    assert isinstance(result, Left)
+    assert "db-error" in result.error
 
 
 def test_init_db_is_safe_under_concurrent_calls(tmp_path: Path) -> None:

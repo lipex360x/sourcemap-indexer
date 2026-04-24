@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+import importlib.util
+
+import pytest
+
 from sourcemap_indexer.domain.value_objects import Language
-from sourcemap_indexer.infra.import_extractor import _EXTRACTORS, PythonImportExtractor
+from sourcemap_indexer.infra.parser.import_extractor import (
+    _EXTRACTORS,
+    PythonImportExtractor,
+    _is_external,
+)
 
 
 def test_extract_simple_import_to_path() -> None:
@@ -85,3 +93,23 @@ def test_extractors_registry_python_callable_works() -> None:
 
 def test_extractors_registry_unknown_language_absent() -> None:
     assert Language.OTHER not in _EXTRACTORS
+
+
+def test_is_external_returns_false_on_find_spec_module_not_found_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _raise(_name: str) -> None:
+        raise ModuleNotFoundError("not found")
+
+    monkeypatch.setattr(importlib.util, "find_spec", _raise)
+    assert _is_external("some_module") is False
+
+
+def test_is_external_returns_false_on_find_spec_value_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _raise(_name: str) -> None:
+        raise ValueError("bad value")
+
+    monkeypatch.setattr(importlib.util, "find_spec", _raise)
+    assert _is_external("some_module") is False

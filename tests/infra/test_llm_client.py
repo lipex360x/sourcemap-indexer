@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from sourcemap_indexer.domain.value_objects import Language, SideEffect, Stability
-from sourcemap_indexer.infra.llm_client import (
+from sourcemap_indexer.infra.llm.llm_client import (
     EnrichmentResult,
     LlmClient,
     LlmConfig,
@@ -141,7 +141,7 @@ def test_is_llm_configured_returns_true_when_url_and_model_set(
 ) -> None:
     monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://myhost/v1/chat/completions")
     monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "my-model")
-    from sourcemap_indexer.infra.llm_client import is_llm_configured
+    from sourcemap_indexer.infra.llm.llm_client import is_llm_configured
 
     assert is_llm_configured() is True
 
@@ -149,7 +149,7 @@ def test_is_llm_configured_returns_true_when_url_and_model_set(
 def test_is_llm_configured_returns_false_when_url_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
     monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "my-model")
-    from sourcemap_indexer.infra.llm_client import is_llm_configured
+    from sourcemap_indexer.infra.llm.llm_client import is_llm_configured
 
     assert is_llm_configured() is False
 
@@ -157,7 +157,7 @@ def test_is_llm_configured_returns_false_when_url_absent(monkeypatch: pytest.Mon
 def test_is_llm_configured_returns_false_when_model_absent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://myhost/v1/chat/completions")
     monkeypatch.delenv("SOURCEMAP_LLM_MODEL", raising=False)
-    from sourcemap_indexer.infra.llm_client import is_llm_configured
+    from sourcemap_indexer.infra.llm.llm_client import is_llm_configured
 
     assert is_llm_configured() is False
 
@@ -407,7 +407,7 @@ def test_custom_system_prompt_is_sent_to_llm() -> None:
 
 
 def test_default_system_prompt_used_when_none_passed() -> None:
-    from sourcemap_indexer.infra.llm_client import SYSTEM_PROMPT
+    from sourcemap_indexer.infra.llm.llm_client import SYSTEM_PROMPT
 
     captured: list[str] = []
 
@@ -570,7 +570,7 @@ def test_build_system_prompt_contains_custom_layers() -> None:
 
 def test_build_system_prompt_default_layers_match_system_prompt() -> None:
     from sourcemap_indexer.domain.value_objects import _DEFAULT_LAYERS
-    from sourcemap_indexer.infra.llm_client import SYSTEM_PROMPT
+    from sourcemap_indexer.infra.llm.llm_client import SYSTEM_PROMPT
 
     assert build_system_prompt(_DEFAULT_LAYERS) == SYSTEM_PROMPT
 
@@ -705,3 +705,52 @@ def test_enrich_without_import_context_user_message_unchanged() -> None:
     )
     client_without.enrich("src/f.py", Language.PY, "x = 1")
     assert with_context[0] == without_context[0]
+
+
+def test_enrich_appends_extra_instruction_to_system_prompt() -> None:
+    captured_system: list[str] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        captured_system.append(body["messages"][0]["content"])
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(capture)
+    client = LlmClient(LlmConfig(), http_client=httpx.Client(transport=transport))
+    client.enrich("src/f.py", Language.PY, "x = 1", extra_instruction="use Spanish")
+    assert "use Spanish" in captured_system[0]
+
+
+def test_enrich_appends_import_context_to_user_prompt() -> None:
+    captured_user: list[str] = []
+
+    def capture(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        captured_user.append(body["messages"][1]["content"])
+        return _mock_response(_VALID_PAYLOAD)
+
+    transport = httpx.MockTransport(capture)
+    client = LlmClient(LlmConfig(), http_client=httpx.Client(transport=transport))
+    client.enrich(
+        "src/f.py",
+        Language.PY,
+        "x = 1",
+        import_context="Context from direct imports:\n- mod/util.py: utility",
+    )
+    assert "Context from direct imports" in captured_user[0]
+
+
+def test_attempt_and_retry_falls_through_to_left_after_two_parse_failures() -> None:
+    bad_response = json.dumps(
+        {"choices": [{"message": {"content": "not-json"}, "finish_reason": "stop"}]}
+    )
+
+    def always_bad(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=bad_response)
+
+    transport = httpx.MockTransport(always_bad)
+    config = LlmConfig(json_mode=False)
+    client = LlmClient(config, http_client=httpx.Client(transport=transport))
+    result = client.enrich("src/f.py", Language.PY, "x = 1")
+    assert isinstance(result, Left)
+    assert result.error == "llm-parse-error"

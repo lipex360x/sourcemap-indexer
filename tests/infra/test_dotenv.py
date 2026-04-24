@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from sourcemap_indexer.infra.dotenv import load_dotenv
+from sourcemap_indexer.infra.config.dotenv import load_dotenv
 
 
 def test_loads_simple_key_value(tmp_path: Path) -> None:

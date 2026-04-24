@@ -33,17 +33,17 @@ from sourcemap_indexer.config import (
     maps_dir,
 )
 from sourcemap_indexer.domain.value_objects import _DEFAULT_LAYERS, Language, Layer
-from sourcemap_indexer.infra.dotenv import load_dotenv
-from sourcemap_indexer.infra.layers_config import load_user_layers
-from sourcemap_indexer.infra.llm_client import (
+from sourcemap_indexer.infra.config.dotenv import load_dotenv
+from sourcemap_indexer.infra.config.layers_config import load_user_layers
+from sourcemap_indexer.infra.db.sqlite_repo import SqliteItemRepository
+from sourcemap_indexer.infra.llm.llm_client import (
     SYSTEM_PROMPT,
     LlmClient,
     LlmConfig,
     from_environ,
     is_llm_configured,
 )
-from sourcemap_indexer.infra.llm_provider import LLMProvider, resolve_provider
-from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
+from sourcemap_indexer.infra.llm.llm_provider import LLMProvider, resolve_provider
 from sourcemap_indexer.lib.either import Either, Left, right
 from sourcemap_indexer.lib.llm_log import create_llm_log
 

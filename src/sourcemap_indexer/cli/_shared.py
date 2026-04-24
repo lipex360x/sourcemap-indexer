@@ -5,8 +5,8 @@ from pathlib import Path
 import typer
 
 from sourcemap_indexer.config import db_path, find_project_root
-from sourcemap_indexer.infra.migrator import init_db
-from sourcemap_indexer.infra.sqlite_repo import SqliteItemRepository
+from sourcemap_indexer.infra.db.migrator import init_db
+from sourcemap_indexer.infra.db.sqlite_repo import SqliteItemRepository
 from sourcemap_indexer.lib.either import Left
 
 _APP_HELP = (
