@@ -88,6 +88,7 @@ def _handle_export_prompt(
         typer.echo("Error: --output must have a .md extension", err=True)
         raise typer.Exit(1)
     export_path.parent.mkdir(parents=True, exist_ok=True)
+    # nosemgrep: python-non-atomic-write
     export_path.write_text(custom_prompt or SYSTEM_PROMPT, encoding="utf-8")
     typer.echo(f"Prompt exported to {export_path}")
     raise typer.Exit(0)

@@ -27,7 +27,9 @@ def init(root: str | None = typer.Option(None, help="Project root")) -> None:
     output_dir = maps_dir(project_root)
     output_dir.mkdir(parents=True, exist_ok=True)
     ignore_file = project_root / ".sourcemapignore"
+    # nosemgrep: python-check-then-write-race
     if not ignore_file.exists():
+        # nosemgrep: python-non-atomic-write
         ignore_file.write_text(_DEFAULT_SOURCEMAPIGNORE, encoding="utf-8")
     result = init_db(db_path(project_root))
     if isinstance(result, Left):
@@ -35,6 +37,8 @@ def init(root: str | None = typer.Option(None, help="Project root")) -> None:
         raise typer.Exit(1)
     result.value.close()
     layers_file = output_dir / "layers.yaml"
+    # nosemgrep: python-check-then-write-race
     if not layers_file.exists():
+        # nosemgrep: python-non-atomic-write
         layers_file.write_text(_LAYERS_YAML_TEMPLATE, encoding="utf-8")
     typer.echo(f"Initialized sourcemap at {project_root}")

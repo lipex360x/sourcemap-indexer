@@ -1,0 +1,30 @@
+name: Mutation
+
+on:
+  workflow_dispatch:
+    inputs:
+      module:
+        description: "Module path to mutate (e.g. src/sourcemap_indexer/infra/fs/walker.py)"
+        required: false
+        default: "src/sourcemap_indexer/"
+
+jobs:
+  mutmut:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run mutmut
+        run: uv run mutmut run --paths-to-mutate "${{ github.event.inputs.module }}"
+
+      - name: Show survivors
+        if: always()
+        run: uv run mutmut results

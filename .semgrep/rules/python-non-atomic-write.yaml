@@ -1,0 +1,17 @@
+rules:
+  - id: python-non-atomic-write
+    patterns:
+      - pattern: $PATH.$WRITE(...)
+      - metavariable-regex:
+          metavariable: $WRITE
+          regex: ^(write_text|write_bytes)$
+      - pattern-not-inside: |
+          def $FUNC(...):
+              ...
+              os.replace(...)
+              ...
+    message: >
+      $PATH.$WRITE() is non-atomic — a crash mid-write leaves a truncated file.
+      Write to a sibling .tmp file then use os.replace(tmp, $PATH).
+    languages: [python]
+    severity: ERROR

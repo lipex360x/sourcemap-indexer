@@ -1,4 +1,6 @@
 .venv/
+.semgrep-venv/
+.mutmut-cache
 .env
 __pycache__/
 *.pyc

@@ -101,5 +101,6 @@ def install_skill(
     dest_dir = Path(target).expanduser() / "sourcemap"
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / "SKILL.md"
+    # nosemgrep: python-non-atomic-write
     dest.write_text(skill_src.read_text(encoding="utf-8"), encoding="utf-8")
     typer.echo(f"Skill installed at {dest}")

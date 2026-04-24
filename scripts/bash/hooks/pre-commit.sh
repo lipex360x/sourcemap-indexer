@@ -4,8 +4,9 @@ set -euo pipefail
 SCRIPT_REAL="$(readlink "$0" 2>/dev/null || echo "$0")"
 ROOT="$(cd "$(dirname "$SCRIPT_REAL")/../../.." && pwd -P)"
 VENV="$ROOT/.venv/bin"
+SEMGREP_VENV="$ROOT/.semgrep-venv/bin/semgrep"
 
-staged_py=$(git diff --cached --name-only --diff-filter=d | grep '\.py$' || true)
+staged_py=$(git diff --cached --name-only --diff-filter=d | grep '\.py$' | grep -v '^\.semgrep/' || true)
 staged_sh=$(git diff --cached --name-only --diff-filter=d | grep '\.sh$' || true)
 
 if [[ -n "$staged_sh" ]]; then
@@ -41,5 +42,13 @@ if [[ -n "$staged_py" ]]; then
     printf "→ pytest + coverage\n"
     "$VENV/pytest" -q
 fi
+
+if [[ ! -x "$SEMGREP_VENV" ]]; then
+    printf "→ semgrep (bootstrapping venv Python 3.12 — first run only)\n"
+    uv venv --python 3.12 "$ROOT/.semgrep-venv" --quiet
+    uv pip install --python "$ROOT/.semgrep-venv" semgrep --quiet
+fi
+printf "→ semgrep\n"
+"$SEMGREP_VENV" --config "$ROOT/.semgrep/rules/" "$ROOT/src/" --error --quiet
 
 printf "✓ pre-commit passed\n"

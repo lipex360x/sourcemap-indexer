@@ -1,0 +1,24 @@
+rules:
+  - id: python-toctou-exists-then-read
+    patterns:
+      - pattern: |
+          if $PATH.exists():
+              ...
+              $PATH.$READ(...)
+      - metavariable-regex:
+          metavariable: $READ
+          regex: ^(read_text|read_bytes)$
+      - pattern-not: |
+          if $PATH.exists():
+              ...
+              try:
+                  ...
+                  $PATH.$READ(...)
+              except ...:
+                  ...
+    message: >
+      TOCTOU: $PATH.exists() followed by $PATH.$READ() — the file may vanish
+      between the check and the read. Use try/except FileNotFoundError instead,
+      or wrap the read in try/except OSError.
+    languages: [python]
+    severity: ERROR

@@ -1,0 +1,10 @@
+rules:
+  - id: python-sqlite-no-begin-immediate
+    pattern: $CONN.executescript(...)
+    message: >
+      $CONN.executescript() implicitly commits any open transaction and runs
+      outside the caller's transaction control. Verify that
+      conn.execute("BEGIN IMMEDIATE") guards every call site, or replace
+      executescript() with individual conn.execute() calls.
+    languages: [python]
+    severity: ERROR

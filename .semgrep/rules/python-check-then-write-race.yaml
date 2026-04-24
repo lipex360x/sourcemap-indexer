@@ -1,0 +1,16 @@
+rules:
+  - id: python-check-then-write-race
+    patterns:
+      - pattern: |
+          if not $PATH.exists():
+              ...
+              $PATH.$WRITE(...)
+      - metavariable-regex:
+          metavariable: $WRITE
+          regex: ^(write_text|write_bytes)$
+    message: >
+      Race condition: not $PATH.exists() followed by $PATH.$WRITE() — another
+      process may create the file between the check and the write. Write
+      unconditionally or use exclusive-open flags.
+    languages: [python]
+    severity: ERROR
