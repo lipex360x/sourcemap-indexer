@@ -50,6 +50,39 @@ Critical rules for this project:
 - Logger: `from sourcemap_indexer.lib.log import create_logger`
 - `SOURCEMAP_LOG_FILE=1` enables file logging (default off); `SOURCEMAP_DEBUG=1` enables debug level
 
+## Static analysis (semgrep)
+
+Four custom rules live in `.semgrep/rules/`. Each rule has a colocated `.py` test file (`# ruleid:` / `# ok:` annotations).
+
+Run locally (isolated Python 3.12 venv, auto-bootstrapped by pre-commit on first run):
+
+```bash
+.semgrep-venv/bin/semgrep --config .semgrep/rules/ src/ --error
+```
+
+To suppress a finding: place `# nosemgrep: <rule-id>` on the line **above** the flagged code (inline placement is not used to keep lines under 100 chars).
+
+## Mutation testing (mutmut)
+
+mutmut v3 requires an isolated Python 3.12 venv — the `setproctitle` C extension it depends on crashes on Python 3.14's fork semantics.
+
+Bootstrap once:
+
+```bash
+uv venv --python 3.12 .mutmut-venv
+uv pip install --python .mutmut-venv mutmut pytest pytest-cov httpx pyyaml pathspec typer rich
+```
+
+Run:
+
+```bash
+PYTHONPATH=src .mutmut-venv/bin/mutmut run
+PYTHONPATH=src .mutmut-venv/bin/mutmut results
+rm -rf mutants/
+```
+
+Never run `uv run mutmut` or `python -m mutmut` — this picks up the system Python 3.14 and will crash. Always use `.mutmut-venv/bin/mutmut`.
+
 ## Walk command flow
 
 ```

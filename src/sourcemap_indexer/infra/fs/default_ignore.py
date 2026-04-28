@@ -23,4 +23,5 @@ DEFAULT_IGNORE = [
     "*.db",
     "*.sqlite",
     ".env",
+    ".sourcemap/",
 ]

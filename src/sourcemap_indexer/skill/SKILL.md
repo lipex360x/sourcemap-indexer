@@ -61,6 +61,7 @@ Query the local SQLite index built by sourcemap-indexer to understand any projec
 | `sourcemap enrich --layer <L>` | Target only files in a specific layer (useful for `unknown`) |
 | `sourcemap enrich --language <L>` | Target only files in a specific language |
 | `sourcemap enrich -m "<instruction>"` | Inject an extra instruction into the LLM prompt |
+| `sourcemap validate` | **CI gate** — verify every file on disk is indexed. Outputs `PASS:sourcemap-db` (exit 0) or one `MISSING:path` per unindexed file (exit 1). Run after `walk` in pre-commit hooks |
 | `sourcemap stats [--page N]` | Overview with pending file list (paginated, 20/page by default) |
 | `sourcemap overview` | Layer × language matrix — project structure at a glance |
 | `sourcemap domain` | Core business logic files (`layer=domain`, enriched only) |

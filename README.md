@@ -326,6 +326,7 @@ Constraints: depth 1 only (no transitive traversal); context is capped at 2000 c
 | `brief --verbose` (or `-v`) | Same as `brief` plus a **Files by layer** section listing every enriched file with its 1-line `purpose`, grouped by layer — use when aggregate counts hide the concept you are looking for (common on documentation-heavy projects) |
 | `chapters` | Table of contents — enriched files grouped by layer and sorted by path (ideal for documentation-heavy projects) |
 | `contracts` | Invariants grouped by layer and file — the semantic contracts captured during enrichment |
+| `validate` | CI gate — verify every file on disk is indexed. Outputs `PASS:sourcemap-db` (exit 0) or one `MISSING:path` per unindexed file (exit 1). Run after `walk` in pre-commit hooks |
 | `profile` | Language distribution, inferred layers, test ratio, top files by size |
 | `stats` | Auto-runs walk; counts by layer and language; bar width = relative file count; green = enriched, yellow = pending |
 | `overview` | Layer × language matrix |
@@ -733,6 +734,18 @@ uv run pytest
 ## 15. Code quality
 
 Every commit passes a pre-commit pipeline that enforces the following gates:
+
+### Using `validate` in pre-commit hooks
+
+`sourcemap validate` is designed as a CI gate: it checks that every file on disk was indexed by the last `walk` run. Pair them in a pre-commit hook:
+
+```bash
+sourcemap walk --root "$PROJECT_ROOT"
+sourcemap validate --root "$PROJECT_ROOT"
+```
+
+Exit codes: `0` = all files indexed, `1` = one or more files missing from the index.
+Output is machine-parseable: `PASS:sourcemap-db` on success, `MISSING:<path>` per unindexed file on failure.
 
 ### Automated gates (pre-commit / pre-push)
 

@@ -19,12 +19,17 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install dependencies
+      - name: Install project dependencies
         run: uv sync --all-extras
 
+      - name: Bootstrap mutmut venv (Python 3.12)
+        run: |
+          uv venv --python 3.12 .mutmut-venv
+          uv pip install --python .mutmut-venv mutmut pytest pytest-cov httpx pyyaml pathspec typer rich
+
       - name: Run mutmut
-        run: uv run mutmut run --paths-to-mutate "${{ github.event.inputs.module }}"
+        run: PYTHONPATH=src .mutmut-venv/bin/mutmut run
 
       - name: Show survivors
         if: always()
-        run: uv run mutmut results
+        run: PYTHONPATH=src .mutmut-venv/bin/mutmut results
