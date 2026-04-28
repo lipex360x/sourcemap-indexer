@@ -263,6 +263,16 @@ def test_enrich_returns_left_when_response_missing_choices() -> None:
     assert result.error == "llm-parse-error"
 
 
+def test_enrich_returns_left_when_content_is_null() -> None:
+    content = json.dumps({"choices": [{"message": {"content": None}, "finish_reason": "stop"}]})
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, text=content))
+    http_client = httpx.Client(transport=transport)
+    client = LlmClient(LlmConfig(), http_client=http_client)
+    result = client.enrich("src/f.py", Language.PY, "code")
+    assert isinstance(result, Left)
+    assert result.error == "llm-parse-error"
+
+
 def test_parse_json_block_found_but_still_invalid_returns_left() -> None:
     bad = "here is some text {key: not valid json value} end"
     content = json.dumps({"choices": [{"message": {"content": bad}}]})

@@ -201,6 +201,17 @@ class LlmClient:
                 finish_reason=finish_reason,
             )
 
+    def _extract_choice(self, response: httpx.Response) -> Either[str, tuple[str, str]]:
+        try:
+            choice = response.json()["choices"][0]
+            raw = choice["message"]["content"]
+            finish_reason = str(choice.get("finish_reason", ""))
+        except (KeyError, IndexError, json.JSONDecodeError):
+            return left("llm-parse-error")
+        if raw is None:
+            return left("llm-parse-error")
+        return right((raw, finish_reason))
+
     def _post_and_extract(self, body: dict[str, Any]) -> Either[str, tuple[str, str]]:
         try:
             response = self._http.post(self._config.url, json=body, headers=self._auth_headers())
@@ -210,13 +221,7 @@ class LlmClient:
             return left(f"llm-request-error: {error}")
         if response.status_code != HTTPStatus.OK:
             return left(f"llm-http-error: {response.status_code}")
-        try:
-            choice = response.json()["choices"][0]
-            raw = choice["message"]["content"]
-            finish_reason = str(choice.get("finish_reason", ""))
-        except (KeyError, IndexError, json.JSONDecodeError):
-            return left("llm-parse-error")
-        return right((raw, finish_reason))
+        return self._extract_choice(response)
 
     def _is_json_format_error(
         self, result: Either[str, tuple[str, str]], body: dict[str, Any]
