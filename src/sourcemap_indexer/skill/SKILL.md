@@ -61,6 +61,7 @@ Query the local SQLite index built by sourcemap-indexer to understand any projec
 | `sourcemap enrich --layer <L>` | Target only files in a specific layer (useful for `unknown`) |
 | `sourcemap enrich --language <L>` | Target only files in a specific language |
 | `sourcemap enrich -m "<instruction>"` | Inject an extra instruction into the LLM prompt |
+| `sourcemap doctor` | **Setup check** — verify LLM provider config and connectivity. Outputs `OK:` / `FAIL:` lines for provider, binary/URL, model, ping, and llm-log status. Exit 1 on any failure. Run before `enrich` to diagnose configuration problems |
 | `sourcemap validate` | **CI gate** — verify every file on disk is indexed. Outputs `PASS:sourcemap-db` (exit 0) or one `MISSING:path` per unindexed file (exit 1). Run after `walk` in pre-commit hooks |
 | `sourcemap stats [--page N]` | Overview with pending file list (paginated, 20/page by default) |
 | `sourcemap overview` | Layer × language matrix — project structure at a glance |
@@ -217,6 +218,6 @@ WHERE t.tag = 'authentication' ORDER BY i.layer;
 | Index not found or empty | Tell user to run `sourcemap init && sourcemap walk` |
 | `(no results)` on preset commands | Inform user that enrichment hasn't run yet for that data; suggest `sourcemap enrich --limit N` |
 | SQL error in `query` | Show the schema reference and suggest the corrected query |
-| LLM unreachable on `enrich` | Check `SOURCEMAP_LLM_URL` env var and confirm the server is running. If using `claude-cli` provider, verify `claude auth status` |
+| LLM unreachable on `enrich` | Run `sourcemap doctor` first — it diagnoses provider, binary, connectivity, and log status in one shot |
 | User asks to reset the index | Run `sourcemap reset` — warns about irreversibility, offers backup (default Y) |
 | User wants to undo a reset | Run `sourcemap restore` — lists timestamped `.bak` files for selection |
