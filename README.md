@@ -5,8 +5,8 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/installed%20via-uv-5c4ee5?logo=astral&logoColor=white)](https://docs.astral.sh/uv/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-471%20passing-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
-[![Coverage](https://img.shields.io/badge/coverage-95%25%2B-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
+[![Tests](https://img.shields.io/badge/tests-612%20passing-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![mypy](https://img.shields.io/badge/mypy-strict-blue)](https://mypy.readthedocs.io/)
 
@@ -461,6 +461,18 @@ export SOURCEMAP_LLM_PROVIDER=opencode
 # Any model ID recognised by your OpenCode config (e.g. anthropic/claude-sonnet-4-6)
 export SOURCEMAP_LLM_CLI_MODEL=anthropic/claude-sonnet-4-6
 ```
+
+**`.env` example — OpenCode with OpenRouter:**
+
+```ini
+# .env  (add to .gitignore)
+SOURCEMAP_LLM_PROVIDER=opencode
+SOURCEMAP_LLM_CLI_MODEL=openrouter/openai/gpt-oss-120b:free
+SOURCEMAP_LLM_LOG=1
+```
+
+> [!NOTE]
+> When routing through OpenRouter, set your API key in OpenCode's own provider config (not in sourcemap's `.env`) — sourcemap passes the prompt to `opencode run` and does not forward `SOURCEMAP_LLM_API_KEY` to it.
 
 **Run:**
 
