@@ -400,6 +400,17 @@ SOURCEMAP_LLM_MODEL=glm-5.1
 SOURCEMAP_LLM_API_KEY=your-api-key
 ```
 
+**`.env` example — OpenRouter (no local install required):**
+
+```ini
+# .env  (add to .gitignore)
+SOURCEMAP_LLM_PROVIDER=http
+SOURCEMAP_LLM_URL=https://openrouter.ai/api/v1/chat/completions
+SOURCEMAP_LLM_MODEL=openai/gpt-oss-120b:free
+SOURCEMAP_LLM_API_KEY=sk-or-v1-...
+SOURCEMAP_LLM_LOG=1
+```
+
 > [!NOTE]
 > Variables already present in the shell environment take precedence over `.env` values.
 
