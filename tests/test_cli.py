@@ -1768,3 +1768,179 @@ def test_render_pending_files_returns_early_when_empty() -> None:
 
     console = _RichConsole(file=StringIO())
     _render_pending_files(console, [], 0, 1, 20)
+
+
+def test_validate_pass_when_all_files_indexed(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text("x = 1\n")
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["walk", "--root", str(tmp_path)])
+    result = runner.invoke(app, ["validate", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "PASS:sourcemap-db" in result.output
+
+
+def test_validate_missing_when_file_not_indexed(tmp_path: Path) -> None:
+    (tmp_path / "main.py").write_text("x = 1\n")
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    runner.invoke(app, ["walk", "--root", str(tmp_path)])
+    (tmp_path / "new_file.py").write_text("y = 2\n")
+    result = runner.invoke(app, ["validate", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+    assert "MISSING:new_file.py" in result.output
+
+
+def test_validate_exits_on_db_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    monkeypatch.setattr(
+        "sourcemap_indexer.infra.db.sqlite_repo.SqliteItemRepository.find_all_paths",
+        lambda _self: mk_left("db-error"),
+    )
+    result = runner.invoke(app, ["validate", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_validate_exits_on_walk_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    runner.invoke(app, ["init", "--root", str(tmp_path)])
+    monkeypatch.setattr(
+        "sourcemap_indexer.cli.insights.validate.walk_project",
+        lambda *_a, **_kw: mk_left("walk-error"),
+    )
+    result = runner.invoke(app, ["validate", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+
+
+def test_doctor_http_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sourcemap_indexer.cli as cli_module  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "http")
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://localhost/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: right(None))
+    result = runner.invoke(app, ["doctor", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "OK:provider=http" in result.output
+    assert "OK:url=http://localhost/v1/chat/completions" in result.output
+    assert "OK:model=test-model" in result.output
+    assert "OK:http-ping=ok" in result.output
+
+
+def test_doctor_http_not_configured_exits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "http")
+    monkeypatch.delenv("SOURCEMAP_LLM_URL", raising=False)
+    monkeypatch.delenv("SOURCEMAP_LLM_MODEL", raising=False)
+    result = runner.invoke(app, ["doctor", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+    assert "FAIL:llm-not-configured" in result.output
+
+
+def test_doctor_http_ping_failure_exits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sourcemap_indexer.cli as cli_module  # noqa: PLC0415
+    from sourcemap_indexer.lib.either import left as mk_left  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "http")
+    monkeypatch.setenv("SOURCEMAP_LLM_URL", "http://localhost/v1/chat/completions")
+    monkeypatch.setenv("SOURCEMAP_LLM_MODEL", "test-model")
+    monkeypatch.setattr(cli_module.LlmClient, "ping", lambda _self: mk_left("llm-unreachable"))
+    result = runner.invoke(app, ["doctor", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+    assert "FAIL:http-ping=" in result.output
+
+
+def test_doctor_opencode_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "opencode")
+    monkeypatch.delenv("SOURCEMAP_LLM_CLI_MODEL", raising=False)
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/local/bin/{name}")
+    result = runner.invoke(app, ["doctor", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "OK:provider=opencode" in result.output
+    assert "OK:opencode-binary=/usr/local/bin/opencode" in result.output
+    assert "OK:model=" not in result.output
+
+
+def test_doctor_opencode_not_found_exits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "opencode")
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    result = runner.invoke(app, ["doctor", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+    assert "FAIL:opencode-not-found" in result.output
+
+
+def test_doctor_claude_cli_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "claude-cli")
+    monkeypatch.delenv("SOURCEMAP_LLM_CLI_MODEL", raising=False)
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    result = runner.invoke(app, ["doctor", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "OK:provider=claude-cli" in result.output
+    assert "OK:claude-binary=/usr/bin/claude" in result.output
+
+
+def test_doctor_claude_cli_not_found_exits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "claude-cli")
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    result = runner.invoke(app, ["doctor", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+    assert "FAIL:claude-not-found" in result.output
+
+
+def test_doctor_llm_log_enabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "opencode")
+    monkeypatch.setenv("SOURCEMAP_LLM_LOG", "1")
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/local/bin/{name}")
+    result = runner.invoke(app, ["doctor", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "OK:llm-log=enabled" in result.output
+
+
+def test_doctor_llm_log_disabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "opencode")
+    monkeypatch.delenv("SOURCEMAP_LLM_LOG", raising=False)
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/local/bin/{name}")
+    result = runner.invoke(app, ["doctor", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "OK:llm-log=disabled" in result.output
+
+
+def test_doctor_shows_model_when_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "opencode")
+    monkeypatch.setenv("SOURCEMAP_LLM_CLI_MODEL", "openrouter/openai/gpt-oss-20b")
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/local/bin/{name}")
+    result = runner.invoke(app, ["doctor", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "OK:model=openrouter/openai/gpt-oss-20b" in result.output
+
+
+def test_doctor_loads_env_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+
+    monkeypatch.delenv("SOURCEMAP_LLM_PROVIDER", raising=False)
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/local/bin/{name}")
+    (tmp_path / ".env").write_text("SOURCEMAP_LLM_PROVIDER=opencode\n")
+    result = runner.invoke(app, ["doctor", "--root", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "OK:provider=opencode" in result.output
+
+
+def test_doctor_unknown_provider_exits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SOURCEMAP_LLM_PROVIDER", "unknown-xyz")
+    result = runner.invoke(app, ["doctor", "--root", str(tmp_path)])
+    assert result.exit_code != 0
+    assert "FAIL:unknown-provider=unknown-xyz" in result.output
