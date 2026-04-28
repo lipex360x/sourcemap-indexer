@@ -41,13 +41,13 @@ def _make_claude_cli(
 
 
 def _make_opencode(
+    llm_log: Any = None,
     system_prompt: Any = None,
     valid_layers: Any = None,
-    **_kwargs: Any,
 ) -> LLMProvider:
     from sourcemap_indexer.infra.llm.opencode_provider import OpenCodeProvider  # noqa: PLC0415
 
-    return OpenCodeProvider(system_prompt=system_prompt, valid_layers=valid_layers)
+    return OpenCodeProvider(llm_log=llm_log, system_prompt=system_prompt, valid_layers=valid_layers)
 
 
 _PROVIDERS: dict[str, Any] = {

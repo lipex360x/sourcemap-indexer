@@ -543,6 +543,62 @@ def test_opencode_embeds_system_prompt_in_message(monkeypatch: pytest.MonkeyPatc
     assert "CUSTOM_SYS" in full_message
 
 
+def test_opencode_calls_llm_log_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    import json  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.opencode_provider import OpenCodeProvider  # noqa: PLC0415
+
+    payload = {
+        "purpose": "p",
+        "tags": ["t"],
+        "layer": "infra",
+        "stability": "stable",
+        "side_effects": [],
+        "invariants": [],
+    }
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args, 0, stdout=json.dumps(payload), stderr="")
+
+    recorded: list[dict[str, object]] = []
+
+    class _SpyLog:
+        def record(self, **kwargs: object) -> None:
+            recorded.append(kwargs)
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/usr/local/bin/opencode")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    OpenCodeProvider(llm_log=_SpyLog()).enrich("app.py", Language.PY, "x = 1")
+    assert len(recorded) == 1
+    assert recorded[0]["result"] == "ok"
+    assert recorded[0]["path"] == "app.py"
+    messages = recorded[0]["messages"]
+    assert isinstance(messages, list)
+    roles = [m["role"] for m in messages]
+    assert "system" in roles
+    assert "user" in roles
+
+
+def test_opencode_factory_forwards_llm_log() -> None:
+    recorded: list[str] = []
+
+    class _SpyLog:
+        def record(self, **kwargs: object) -> None:
+            recorded.append(str(kwargs.get("result")))
+
+    result = resolve_provider("opencode")
+    assert isinstance(result, Right)
+    provider = result.value(llm_log=_SpyLog())
+    from sourcemap_indexer.infra.llm.opencode_provider import OpenCodeProvider  # noqa: PLC0415
+
+    assert isinstance(provider, OpenCodeProvider)
+    assert hasattr(provider, "_llm_log")
+    assert provider._llm_log is not None
+
+
 def test_claude_cli_auth_failure_returns_left(monkeypatch: pytest.MonkeyPatch) -> None:
     import shutil  # noqa: PLC0415
     import subprocess  # noqa: PLC0415

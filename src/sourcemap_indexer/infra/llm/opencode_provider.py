@@ -11,7 +11,8 @@ from sourcemap_indexer.infra.llm.llm_client import (
     _parse_enrichment,
     build_system_prompt,
 )
-from sourcemap_indexer.lib.either import Either, left
+from sourcemap_indexer.lib.either import Either, Left, left
+from sourcemap_indexer.lib.llm_log import LlmLog
 
 
 def _build_prompt(
@@ -42,15 +43,34 @@ def _build_cmd(prompt: str) -> list[str]:
 class OpenCodeProvider:
     def __init__(
         self,
+        llm_log: LlmLog | None = None,
         system_prompt: str | None = None,
         valid_layers: frozenset[str] | None = None,
     ) -> None:
+        self._llm_log = llm_log
         if system_prompt is not None:
             self._system_prompt = system_prompt
         elif valid_layers is not None:
             self._system_prompt = build_system_prompt(valid_layers)
         else:
             self._system_prompt = SYSTEM_PROMPT
+
+    def _log(
+        self, path: str, language: Language, user_prompt: str, result: str, raw: str = ""
+    ) -> None:
+        if self._llm_log is not None:
+            self._llm_log.record(
+                path=path,
+                language=str(language),
+                model=llm_cli_model() or "opencode",
+                messages=[
+                    {"role": "system", "content": self._system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                response_raw=raw,
+                result=result,
+                finish_reason="",
+            )
 
     def enrich(
         self,
@@ -62,6 +82,12 @@ class OpenCodeProvider:
     ) -> Either[str, EnrichmentResult]:
         if not shutil.which("opencode"):
             return left("opencode-not-configured")
+        lang_str = str(language)
+        user_prompt = f"Path: {path}\nLanguage: {language}\n\n```{lang_str}\n{content}\n```"
+        if extra_instruction:
+            user_prompt += f"\n\nAdditional instruction: {extra_instruction}"
+        if import_context:
+            user_prompt += f"\n\n{import_context}"
         prompt = _build_prompt(
             self._system_prompt, path, language, content, extra_instruction, import_context
         )
@@ -73,5 +99,10 @@ class OpenCodeProvider:
                 check=True,
             )
         except subprocess.CalledProcessError as exc:
-            return left(f"opencode-error: {exc.returncode}")
-        return _parse_enrichment(proc.stdout.strip())
+            error = f"opencode-error: {exc.returncode}"
+            self._log(path, language, user_prompt, error)
+            return left(error)
+        parsed = _parse_enrichment(proc.stdout.strip())
+        result_label = "ok" if not isinstance(parsed, Left) else parsed.error
+        self._log(path, language, user_prompt, result_label, proc.stdout.strip())
+        return parsed
