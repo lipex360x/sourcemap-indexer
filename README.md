@@ -443,6 +443,16 @@ export SOURCEMAP_LLM_CLI_MODEL=claude-sonnet-4-6
 export SOURCEMAP_LLM_CLI_EFFORT=high
 ```
 
+**`.env` example — `claude-cli` with Sonnet 4.6:**
+
+```ini
+# .env  (add to .gitignore)
+SOURCEMAP_LLM_PROVIDER=claude-cli
+SOURCEMAP_LLM_CLI_MODEL=claude-sonnet-4-6
+SOURCEMAP_LLM_CLI_EFFORT=high
+SOURCEMAP_LLM_LOG=1
+```
+
 **Run:**
 
 ```bash
