@@ -32,6 +32,7 @@ def _build_prompt(
     import_context: str | None = None,
 ) -> str:
     lang_str = str(language)
+    content = content.replace("\x00", "")
     prompt = f"Path: {path}\nLanguage: {language}\n\n```{lang_str}\n{content}\n```"
     if extra_instruction:
         prompt += f"\n\nAdditional instruction: {extra_instruction}"
