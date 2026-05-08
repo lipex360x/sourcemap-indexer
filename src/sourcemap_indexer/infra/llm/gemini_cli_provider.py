@@ -26,6 +26,7 @@ def _build_user_prompt(
     import_context: str | None,
 ) -> str:
     lang_str = str(language)
+    content = content.replace("\x00", "")
     user = f"Path: {path}\nLanguage: {language}\n\n```{lang_str}\n{content}\n```"
     if extra_instruction:
         user += f"\n\nAdditional instruction: {extra_instruction}"

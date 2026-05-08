@@ -846,6 +846,37 @@ def test_opencode_uses_valid_layers_for_system_prompt(monkeypatch: pytest.Monkey
     assert "custom-layer" in full_prompt
 
 
+def test_opencode_strips_null_bytes_from_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    import json  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.opencode_provider import OpenCodeProvider  # noqa: PLC0415
+
+    captured: list[list[str]] = []
+    payload = {
+        "purpose": "p",
+        "tags": ["t"],
+        "layer": "infra",
+        "stability": "stable",
+        "side_effects": [],
+        "invariants": [],
+    }
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured.append(args)
+        return subprocess.CompletedProcess(args, 0, stdout=json.dumps(payload), stderr="")
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/usr/local/bin/opencode")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    OpenCodeProvider().enrich("app.py", Language.PY, "x = 1\x00\x00y = 2")
+    full_prompt = " ".join(captured[0])
+    assert "\x00" not in full_prompt
+    assert "x = 1" in full_prompt
+    assert "y = 2" in full_prompt
+
+
 def _gemini_payload(response_body: str) -> str:
     import json  # noqa: PLC0415
 
@@ -1196,6 +1227,32 @@ def test_gemini_cli_appends_extra_instruction_and_import_context(
     user_prompt = recorded[0]["messages"][1]["content"]  # type: ignore[index]
     assert "be terse" in user_prompt
     assert "Imports: foo, bar" in user_prompt
+
+
+def test_gemini_cli_strips_null_bytes_from_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    captured: list[list[str]] = []
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured.append(args)
+        return subprocess.CompletedProcess(
+            args, 0, stdout=_gemini_payload(_gemini_enrichment_response()), stderr=""
+        )
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    GeminiCliProvider().enrich("app.py", Language.PY, "x = 1\x00\x00y = 2")
+    full_prompt = " ".join(captured[0])
+    assert "\x00" not in full_prompt
+    assert "x = 1" in full_prompt
+    assert "y = 2" in full_prompt
 
 
 def test_gemini_cli_factory_forwards_valid_layers(monkeypatch: pytest.MonkeyPatch) -> None:
