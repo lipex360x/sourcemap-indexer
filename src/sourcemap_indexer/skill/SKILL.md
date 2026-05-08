@@ -56,7 +56,7 @@ Query the local SQLite index built by sourcemap-indexer to understand any projec
 | `sourcemap brief --verbose` (or `-v`) | Same as `brief` plus a **Files by layer** section listing every enriched file with its 1-line `purpose`, grouped by layer. Use when aggregate counts are not enough to locate a concept — especially on documentation-heavy projects where most files live in support layers |
 | `sourcemap chapters [--layer L]` | Table of contents — enriched files grouped by layer and sorted by path. Ideal for documentation-heavy projects |
 | `sourcemap contracts [--layer L]` | Invariants grouped by layer and file — the semantic contracts captured during enrichment. Use this instead of `brief` to read every invariant |
-| `sourcemap enrich [--limit N]` | Run LLM enrichment on pending files. Provider selected via `SOURCEMAP_LLM_PROVIDER` (`http` default, or `claude-cli` for Claude subscription) |
+| `sourcemap enrich [--limit N]` | Run LLM enrichment on pending files. Provider selected via `SOURCEMAP_LLM_PROVIDER` — `http` (default), `claude-cli`, `opencode`, or `gemini-cli` |
 | `sourcemap enrich --force` | Re-enrich already enriched files (e.g. to fix language or layer) |
 | `sourcemap enrich --layer <L>` | Target only files in a specific layer (useful for `unknown`) |
 | `sourcemap enrich --language <L>` | Target only files in a specific language |

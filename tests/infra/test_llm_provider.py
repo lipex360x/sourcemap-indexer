@@ -844,3 +844,379 @@ def test_opencode_uses_valid_layers_for_system_prompt(monkeypatch: pytest.Monkey
     )
     full_prompt = captured[0][2]
     assert "custom-layer" in full_prompt
+
+
+def _gemini_payload(response_body: str) -> str:
+    import json  # noqa: PLC0415
+
+    return json.dumps({"session_id": "abc", "response": response_body, "stats": {}})
+
+
+def _gemini_enrichment_response() -> str:
+    import json  # noqa: PLC0415
+
+    return json.dumps(
+        {
+            "purpose": "Entry point",
+            "tags": ["cli"],
+            "layer": "application",
+            "stability": "stable",
+            "side_effects": [],
+            "invariants": [],
+        }
+    )
+
+
+def test_resolve_gemini_cli_returns_right() -> None:
+    result = resolve_provider("gemini-cli")
+    assert isinstance(result, Right)
+
+
+def test_gemini_cli_provider_satisfies_protocol() -> None:
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    provider = GeminiCliProvider.__new__(GeminiCliProvider)
+    assert isinstance(provider, LLMProvider)
+
+
+def test_gemini_cli_not_on_path_returns_left(monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    result = GeminiCliProvider().enrich("app.py", Language.PY, "x = 1")
+    assert isinstance(result, Left)
+    assert result.error == "gemini-cli-not-configured"
+
+
+def test_gemini_cli_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args, 0, stdout=_gemini_payload(_gemini_enrichment_response()), stderr=""
+        )
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    result = GeminiCliProvider().enrich("app.py", Language.PY, "x = 1")
+    assert isinstance(result, Right)
+    assert result.value.purpose == "Entry point"
+
+
+def test_gemini_cli_command_includes_skip_trust_and_json_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    captured: list[list[str]] = []
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured.append(args)
+        return subprocess.CompletedProcess(
+            args, 0, stdout=_gemini_payload(_gemini_enrichment_response()), stderr=""
+        )
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    GeminiCliProvider().enrich("app.py", Language.PY, "x = 1")
+    assert "--skip-trust" in captured[0]
+    assert "-o" in captured[0]
+    json_idx = captured[0].index("-o")
+    assert captured[0][json_idx + 1] == "json"
+    assert "-p" in captured[0]
+
+
+def test_gemini_cli_passes_model_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    captured: list[list[str]] = []
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured.append(args)
+        return subprocess.CompletedProcess(
+            args, 0, stdout=_gemini_payload(_gemini_enrichment_response()), stderr=""
+        )
+
+    monkeypatch.setenv("SOURCEMAP_LLM_CLI_MODEL", "gemini-2.5-pro")
+    monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    GeminiCliProvider().enrich("app.py", Language.PY, "x = 1")
+    assert "-m" in captured[0]
+    idx = captured[0].index("-m")
+    assert captured[0][idx + 1] == "gemini-2.5-pro"
+
+
+def test_gemini_cli_omits_model_flag_when_not_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    captured: list[list[str]] = []
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured.append(args)
+        return subprocess.CompletedProcess(
+            args, 0, stdout=_gemini_payload(_gemini_enrichment_response()), stderr=""
+        )
+
+    monkeypatch.delenv("SOURCEMAP_LLM_CLI_MODEL", raising=False)
+    monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    GeminiCliProvider().enrich("app.py", Language.PY, "x = 1")
+    assert "-m" not in captured[0]
+
+
+def test_gemini_cli_subprocess_error_returns_left(monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.CalledProcessError(1, args)
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    result = GeminiCliProvider().enrich("app.py", Language.PY, "x = 1")
+    assert isinstance(result, Left)
+    assert result.error.startswith("gemini-cli-error:")
+
+
+def test_gemini_cli_quota_exhausted_returns_left(monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args,
+            0,
+            stdout="",
+            stderr="Attempt 1 failed: You have exhausted your capacity on this model..",
+        )
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    result = GeminiCliProvider().enrich("app.py", Language.PY, "x = 1")
+    assert isinstance(result, Left)
+    assert result.error == "gemini-cli-quota-exhausted"
+
+
+def test_gemini_cli_outer_json_parse_error_returns_left(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args, 0, stdout="not json at all", stderr="")
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    result = GeminiCliProvider().enrich("app.py", Language.PY, "x = 1")
+    assert isinstance(result, Left)
+    assert result.error == "gemini-cli-parse-error"
+
+
+def test_gemini_cli_missing_response_field_returns_left(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import json  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args, 0, stdout=json.dumps({"session_id": "x"}), stderr=""
+        )
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    result = GeminiCliProvider().enrich("app.py", Language.PY, "x = 1")
+    assert isinstance(result, Left)
+    assert result.error == "gemini-cli-parse-error"
+
+
+def test_gemini_cli_embeds_system_prompt_in_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    captured: list[list[str]] = []
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured.append(args)
+        return subprocess.CompletedProcess(
+            args, 0, stdout=_gemini_payload(_gemini_enrichment_response()), stderr=""
+        )
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    GeminiCliProvider(system_prompt="CUSTOM_SYS").enrich("app.py", Language.PY, "x = 1")
+    full_message = " ".join(captured[0])
+    assert "CUSTOM_SYS" in full_message
+
+
+def test_gemini_cli_calls_llm_log_on_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args, 0, stdout=_gemini_payload(_gemini_enrichment_response()), stderr=""
+        )
+
+    recorded: list[dict[str, object]] = []
+
+    class _SpyLog:
+        def record(self, **kwargs: object) -> None:
+            recorded.append(kwargs)
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    GeminiCliProvider(llm_log=_SpyLog()).enrich("app.py", Language.PY, "x = 1")
+    assert len(recorded) == 1
+    assert recorded[0]["result"] == "ok"
+    assert recorded[0]["path"] == "app.py"
+    messages = recorded[0]["messages"]
+    assert isinstance(messages, list)
+    roles = [m["role"] for m in messages]
+    assert "system" in roles
+    assert "user" in roles
+
+
+def test_gemini_cli_factory_forwards_llm_log() -> None:
+    class _SpyLog:
+        def record(self, **_kwargs: object) -> None:
+            return None
+
+    result = resolve_provider("gemini-cli")
+    assert isinstance(result, Right)
+    provider = result.value(llm_log=_SpyLog())
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    assert isinstance(provider, GeminiCliProvider)
+    assert provider._llm_log is not None
+
+
+def test_gemini_cli_appends_extra_instruction_and_import_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    captured: list[list[str]] = []
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured.append(args)
+        return subprocess.CompletedProcess(
+            args, 0, stdout=_gemini_payload(_gemini_enrichment_response()), stderr=""
+        )
+
+    recorded: list[dict[str, object]] = []
+
+    class _SpyLog:
+        def record(self, **kwargs: object) -> None:
+            recorded.append(kwargs)
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    GeminiCliProvider(llm_log=_SpyLog()).enrich(
+        "app.py",
+        Language.PY,
+        "x = 1",
+        extra_instruction="be terse",
+        import_context="Imports: foo, bar",
+    )
+    full_prompt = " ".join(captured[0])
+    assert "be terse" in full_prompt
+    assert "Imports: foo, bar" in full_prompt
+    user_prompt = recorded[0]["messages"][1]["content"]  # type: ignore[index]
+    assert "be terse" in user_prompt
+    assert "Imports: foo, bar" in user_prompt
+
+
+def test_gemini_cli_factory_forwards_valid_layers(monkeypatch: pytest.MonkeyPatch) -> None:
+    import shutil  # noqa: PLC0415
+    import subprocess  # noqa: PLC0415
+
+    from sourcemap_indexer.domain.value_objects import Language  # noqa: PLC0415
+
+    captured: list[list[str]] = []
+
+    def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured.append(args)
+        return subprocess.CompletedProcess(
+            args, 0, stdout=_gemini_payload(_gemini_enrichment_response()), stderr=""
+        )
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    factory = resolve_provider("gemini-cli")
+    assert isinstance(factory, Right)
+    provider = factory.value(valid_layers=frozenset({"domain", "custom-layer"}))
+    provider.enrich("app.py", Language.PY, "x = 1")
+    full_prompt = " ".join(captured[0])
+    assert "custom-layer" in full_prompt

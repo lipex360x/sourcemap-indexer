@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![uv](https://img.shields.io/badge/installed%20via-uv-5c4ee5?logo=astral&logoColor=white)](https://docs.astral.sh/uv/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-612%20passing-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
+[![Tests](https://img.shields.io/badge/tests-629%20passing-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)](https://github.com/lipex360x/sourcemap-indexer)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![mypy](https://img.shields.io/badge/mypy-strict-blue)](https://mypy.readthedocs.io/)
@@ -23,16 +23,15 @@
 | 3 | [Installation](#installation) |
 | 4 | [Quickstart](#quickstart) |
 | 5 | [Commands](#commands) |
-| 6 | [Environment variables](#env) |
+| 6 | [Configuration](#config) |
 | 7 | [Ignoring files](#ignoring) |
 | 8 | [Custom layers](#layers) |
 | 9 | [Project metadata](#project) |
-| 10 | [Plugging in a different LLM](#llm) |
-| 11 | [AI assistant skill](#skill) |
-| 12 | [Post-commit hook](#hook) |
-| 13 | [SQLite schema](#schema) |
-| 14 | [Dev setup](#dev) |
-| 15 | [Code quality](#quality) |
+| 10 | [AI assistant skill](#skill) |
+| 11 | [Post-commit hook](#hook) |
+| 12 | [SQLite schema](#schema) |
+| 13 | [Dev setup](#dev) |
+| 14 | [Code quality](#quality) |
 
 ---
 
@@ -371,19 +370,31 @@ Constraints: depth 1 only (no transitive traversal); context is capped at 2000 c
 
 ---
 
-<a id="env"></a>
+<a id="config"></a>
 
-## 6. Environment variables
+## 6. Configuration
+
+`sourcemap enrich` reads a `.env` file from the project root before resolving env vars. Variables already present in the shell environment take precedence.
+
+### Pick a provider
+
+| Provider | Auth | Cost | Best for |
+|----------|------|------|----------|
+| [`http`](#provider-http) | API key (Bearer) | per-token | OpenAI / OpenRouter / z.ai / local LM Studio / any OpenAI-compatible endpoint |
+| [`claude-cli`](#provider-claude-cli) | Claude Code login | Claude.ai subscription | Claude Code subscribers |
+| [`opencode`](#provider-opencode) | OpenCode CLI config | depends on configured backend | OpenCode users routing through their existing setup |
+| [`gemini-cli`](#provider-gemini-cli) | Google OAuth | free tier (~1 000 req/day) | Gemini free-tier users |
+
+Set `SOURCEMAP_LLM_PROVIDER` to one of the above (default: `http`).
+
+### Common variables
+
+These apply to every provider:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SOURCEMAP_LLM_PROVIDER` | `http` | LLM backend — `http` (OpenAI-compatible HTTP server), `claude-cli` (Claude.ai subscription via `claude -p`), or `opencode` (OpenCode CLI via `opencode run`) |
-| `SOURCEMAP_LLM_URL` | _(required for `http`)_ | LLM endpoint (any OpenAI-compatible API) — `enrich` is blocked until this is set when using `http` provider |
-| `SOURCEMAP_LLM_MODEL` | _(required for `http`)_ | Model name passed to the endpoint — `enrich` is blocked until this is set when using `http` provider |
-| `SOURCEMAP_LLM_CLI_MODEL` | _(default model)_ | Claude model used by `claude-cli` provider — e.g. `claude-haiku-4-5-20251001`, `claude-sonnet-4-6`, `claude-opus-4-7`. Omit to use Claude's default |
-| `SOURCEMAP_LLM_CLI_EFFORT` | _(default)_ | Effort level for `claude-cli` provider — `low`, `medium`, `high`, `xhigh`, `max`. Controls thinking budget. Omit to use Claude's default |
-| `SOURCEMAP_LLM_API_KEY` | _(empty)_ | Bearer token for authenticated providers |
-| `SOURCEMAP_LLM_LOG` | _(off)_ | Set to `1` to write LLM request/response logs to `logs/` inside the maps directory |
+| `SOURCEMAP_LLM_PROVIDER` | `http` | Backend selector — see table above |
+| `SOURCEMAP_LLM_LOG` | _(off)_ | `1` writes LLM request/response logs to `logs/` inside the maps directory |
 | `SOURCEMAP_PAGE_SIZE` | `20` | Number of pending files shown per page in `stats` |
 | `SOURCEMAP_MAPS_DIR` | `.sourcemap` | Output directory for `index.db`, `index.yaml`, `layers.yaml`, and logs — relative to project root or absolute |
 | `SOURCEMAP_IMPORT_LLM_PROMPT` | _(off)_ | Path to a `.md` file — `enrich` reads it and sends its contents as the system prompt instead of the built-in default. Must have `.md` extension |
@@ -391,16 +402,35 @@ Constraints: depth 1 only (no transitive traversal); context is capped at 2000 c
 > [!TIP]
 > Typical workflow: run `sourcemap enrich --export-llm-prompt` once to dump the default prompt, edit the generated file, then set `SOURCEMAP_IMPORT_LLM_PROMPT` to its path for subsequent runs.
 
-`sourcemap enrich` automatically reads a `.env` file from the project root before resolving env vars:
+After choosing a provider, copy the matching `.env` template below and run:
+
+```bash
+sourcemap enrich --limit 10
+```
+
+<a id="provider-http"></a>
+
+### `http` — OpenAI-compatible endpoint (default)
+
+Provider-specific variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SOURCEMAP_LLM_URL` | yes | Endpoint URL (any OpenAI-compatible chat completions API) |
+| `SOURCEMAP_LLM_MODEL` | yes | Model name passed to the endpoint |
+| `SOURCEMAP_LLM_API_KEY` | depends | Bearer token — required by hosted providers, not needed for local servers |
+
+**`.env` — OpenAI:**
 
 ```ini
 # .env  (add to .gitignore)
-SOURCEMAP_LLM_URL=https://api.z.ai/api/coding/paas/v4/chat/completions
-SOURCEMAP_LLM_MODEL=glm-5.1
-SOURCEMAP_LLM_API_KEY=your-api-key
+SOURCEMAP_LLM_PROVIDER=http
+SOURCEMAP_LLM_URL=https://api.openai.com/v1/chat/completions
+SOURCEMAP_LLM_MODEL=gpt-4o
+SOURCEMAP_LLM_API_KEY=sk-...
 ```
 
-**`.env` example — OpenRouter (no local install required):**
+**`.env` — OpenRouter (free tier available):**
 
 ```ini
 # .env  (add to .gitignore)
@@ -411,39 +441,49 @@ SOURCEMAP_LLM_API_KEY=sk-or-v1-...
 SOURCEMAP_LLM_LOG=1
 ```
 
+**`.env` — z.ai:**
+
+```ini
+# .env  (add to .gitignore)
+SOURCEMAP_LLM_PROVIDER=http
+SOURCEMAP_LLM_URL=https://api.z.ai/api/coding/paas/v4/chat/completions
+SOURCEMAP_LLM_MODEL=glm-5.1
+SOURCEMAP_LLM_API_KEY=your-api-key
+```
+
+**`.env` — local (LM Studio, no API key needed):**
+
+```ini
+# .env  (add to .gitignore)
+SOURCEMAP_LLM_PROVIDER=http
+SOURCEMAP_LLM_URL=http://localhost:1234/v1/chat/completions
+SOURCEMAP_LLM_MODEL=your-loaded-model-name
+```
+
+<a id="provider-claude-cli"></a>
+
+### `claude-cli` — Claude Code subscription
+
 > [!NOTE]
-> Variables already present in the shell environment take precedence over `.env` values.
+> Runs via `claude -p` (Claude Code CLI). Requires [Claude Code](https://claude.ai/code) installed and authenticated — does **not** work with other `claude` CLI tools.
 
-### Using `claude-cli` provider
+When `SOURCEMAP_LLM_PROVIDER=claude-cli`, the `SOURCEMAP_LLM_URL`, `SOURCEMAP_LLM_MODEL`, and `SOURCEMAP_LLM_API_KEY` variables are ignored — you can keep them in `.env` without conflict.
 
-> [!NOTE]
-> The `claude-cli` provider runs via `claude -p` (Claude Code CLI). It requires [Claude Code](https://claude.ai/code) to be installed and authenticated — it does **not** work with other `claude` CLI tools.
+Provider-specific variables:
 
-If you have a Claude.ai subscription, you can run enrichment without an API key or local LLM server. When `SOURCEMAP_LLM_PROVIDER=claude-cli`, the `SOURCEMAP_LLM_URL`, `SOURCEMAP_LLM_MODEL`, and `SOURCEMAP_LLM_API_KEY` variables are ignored — you can keep them in your `.env` without conflict.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SOURCEMAP_LLM_CLI_MODEL` | _(Claude default)_ | Model — e.g. `claude-haiku-4-5-20251001`, `claude-sonnet-4-6`, `claude-opus-4-7` |
+| `SOURCEMAP_LLM_CLI_EFFORT` | _(Claude default)_ | Thinking budget — `low`, `medium`, `high`, `xhigh`, `max` |
 
 **Setup:**
 
 ```bash
-# 1. Install Claude Code and authenticate
 npm install -g @anthropic-ai/claude-code
 claude auth login
-
-# 2. Set the provider
-export SOURCEMAP_LLM_PROVIDER=claude-cli
 ```
 
-**Optional — choose model and effort:**
-
-```bash
-# Model (omit to use Claude's default)
-export SOURCEMAP_LLM_CLI_MODEL=claude-sonnet-4-6
-
-# Effort / thinking budget (omit to use Claude's default)
-# Values: low | medium | high | xhigh | max
-export SOURCEMAP_LLM_CLI_EFFORT=high
-```
-
-**`.env` example — `claude-cli` with Sonnet 4.6:**
+**`.env`:**
 
 ```ini
 # .env  (add to .gitignore)
@@ -453,37 +493,28 @@ SOURCEMAP_LLM_CLI_EFFORT=high
 SOURCEMAP_LLM_LOG=1
 ```
 
-**Run:**
+<a id="provider-opencode"></a>
 
-```bash
-sourcemap enrich --limit 10
-```
-
-### Using `opencode` provider
+### `opencode` — OpenCode CLI
 
 > [!NOTE]
-> The `opencode` provider runs via `opencode run` (OpenCode CLI). It requires [OpenCode](https://opencode.ai) to be installed and configured with at least one model provider.
+> Runs via `opencode run`. Requires [OpenCode](https://opencode.ai) installed and configured with at least one model provider.
 
-If you use OpenCode as your AI coding assistant, you can drive enrichment through it directly — no API key or Claude subscription required. When `SOURCEMAP_LLM_PROVIDER=opencode`, the `SOURCEMAP_LLM_URL`, `SOURCEMAP_LLM_MODEL`, `SOURCEMAP_LLM_API_KEY`, and `SOURCEMAP_LLM_CLI_EFFORT` variables are ignored.
+When `SOURCEMAP_LLM_PROVIDER=opencode`, the `SOURCEMAP_LLM_URL`, `SOURCEMAP_LLM_MODEL`, `SOURCEMAP_LLM_API_KEY`, and `SOURCEMAP_LLM_CLI_EFFORT` variables are ignored.
+
+Provider-specific variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SOURCEMAP_LLM_CLI_MODEL` | _(OpenCode default)_ | Any model ID recognised by your OpenCode config — e.g. `anthropic/claude-sonnet-4-6`, `openrouter/openai/gpt-oss-120b:free` |
 
 **Setup:**
 
 ```bash
-# 1. Install OpenCode
 npm install -g opencode-ai
-
-# 2. Set the provider
-export SOURCEMAP_LLM_PROVIDER=opencode
 ```
 
-**Optional — pin a specific model:**
-
-```bash
-# Any model ID recognised by your OpenCode config (e.g. anthropic/claude-sonnet-4-6)
-export SOURCEMAP_LLM_CLI_MODEL=anthropic/claude-sonnet-4-6
-```
-
-**`.env` example — OpenCode with OpenRouter:**
+**`.env`:**
 
 ```ini
 # .env  (add to .gitignore)
@@ -493,13 +524,40 @@ SOURCEMAP_LLM_LOG=1
 ```
 
 > [!NOTE]
-> When routing through OpenRouter, set your API key in OpenCode's own provider config (not in sourcemap's `.env`) — sourcemap passes the prompt to `opencode run` and does not forward `SOURCEMAP_LLM_API_KEY` to it.
+> When routing through OpenRouter, set your API key in OpenCode's own provider config — sourcemap passes the prompt to `opencode run` and does not forward `SOURCEMAP_LLM_API_KEY` to it.
 
-**Run:**
+<a id="provider-gemini-cli"></a>
+
+### `gemini-cli` — Google Gemini free tier
+
+> [!NOTE]
+> Runs via `gemini -p` ([Gemini CLI](https://github.com/google-gemini/gemini-cli)) authenticated with a personal Google account. The default model `gemini-3-flash-preview` is recommended — `gemini-2.5-pro` exists but the free tier exhausts quota quickly under enrichment workloads.
+
+When `SOURCEMAP_LLM_PROVIDER=gemini-cli`, the `SOURCEMAP_LLM_URL`, `SOURCEMAP_LLM_MODEL`, `SOURCEMAP_LLM_API_KEY`, and `SOURCEMAP_LLM_CLI_EFFORT` variables are ignored.
+
+Provider-specific variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SOURCEMAP_LLM_CLI_MODEL` | _(Gemini default — `gemini-3-flash-preview`)_ | Model — e.g. `gemini-3-flash-preview`, `gemini-2.5-pro` |
+
+**Setup:**
 
 ```bash
-sourcemap enrich --limit 10
+brew install gemini-cli
+gemini   # interactive — sign in with your Google account on first run
 ```
+
+**`.env`:**
+
+```ini
+# .env  (add to .gitignore)
+SOURCEMAP_LLM_PROVIDER=gemini-cli
+SOURCEMAP_LLM_LOG=1
+```
+
+> [!NOTE]
+> sourcemap always passes `--skip-trust` to `gemini` so headless runs are not blocked by the trusted-folder gate. Stderr noise from `gemini` (housekeeping warnings, IDE-companion errors) is ignored — only the `response` field of the JSON output is used. Quota errors (`exhausted your capacity`) short-circuit to `gemini-cli-quota-exhausted` instead of waiting for the binary's internal retry loop.
 
 <div align="right"><a href="#top">↑ back to top</a></div>
 
@@ -630,38 +688,9 @@ When the file is absent, `brief` renders without a project section — no regres
 
 ---
 
-<a id="llm"></a>
-
-## 10. Plugging in a different LLM
-
-The enrichment client targets any OpenAI-compatible endpoint:
-
-```bash
-# OpenAI
-export SOURCEMAP_LLM_URL=https://api.openai.com/v1/chat/completions
-export SOURCEMAP_LLM_MODEL=gpt-4o
-export SOURCEMAP_LLM_API_KEY=sk-...
-
-# OpenRouter (free tier available)
-export SOURCEMAP_LLM_URL=https://openrouter.ai/api/v1/chat/completions
-export SOURCEMAP_LLM_MODEL=deepseek/deepseek-r1:free
-export SOURCEMAP_LLM_API_KEY=sk-or-...
-
-# Local (LM Studio)
-export SOURCEMAP_LLM_URL=http://localhost:1234/v1/chat/completions
-export SOURCEMAP_LLM_MODEL=your-loaded-model-name
-# SOURCEMAP_LLM_API_KEY not needed for local
-
-sourcemap enrich --limit 10
-```
-
-<div align="right"><a href="#top">↑ back to top</a></div>
-
----
-
 <a id="skill"></a>
 
-## 11. AI assistant skill
+## 10. AI assistant skill
 
 Install the bundled skill file so your AI assistant can query the index directly:
 
@@ -679,7 +708,7 @@ sourcemap install-skill --target <your-tool-skills-dir>
 
 <a id="hook"></a>
 
-## 12. Post-commit hook (auto-walk on every commit)
+## 11. Post-commit hook (auto-walk on every commit)
 
 ```bash
 bash scripts/bash/install-hook.sh
@@ -696,7 +725,7 @@ Installs a `post-commit` hook that runs `sourcemap walk` after every commit, kee
 
 <a id="schema"></a>
 
-## 13. SQLite schema
+## 12. SQLite schema
 
 One core table (`items`) holds a row per file. Three satellite tables store the multi-valued LLM output (a file has many tags, many side effects, many invariants):
 
@@ -749,7 +778,7 @@ Side effects: `writes_fs | spawns_process | network | git | environ`
 
 <a id="dev"></a>
 
-## 14. Dev setup
+## 13. Dev setup
 
 ```bash
 git clone https://github.com/lipex360x/sourcemap-indexer.git
@@ -764,7 +793,7 @@ uv run pytest
 
 <a id="quality"></a>
 
-## 15. Code quality
+## 14. Code quality
 
 Every commit passes a pre-commit pipeline that enforces the following gates:
 

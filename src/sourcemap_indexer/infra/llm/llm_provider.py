@@ -50,10 +50,25 @@ def _make_opencode(
     return OpenCodeProvider(llm_log=llm_log, system_prompt=system_prompt, valid_layers=valid_layers)
 
 
+def _make_gemini_cli(
+    llm_log: Any = None,
+    system_prompt: Any = None,
+    valid_layers: Any = None,
+) -> LLMProvider:
+    from sourcemap_indexer.infra.llm.gemini_cli_provider import (  # noqa: PLC0415
+        GeminiCliProvider,
+    )
+
+    return GeminiCliProvider(
+        llm_log=llm_log, system_prompt=system_prompt, valid_layers=valid_layers
+    )
+
+
 _PROVIDERS: dict[str, Any] = {
     "http": _make_http,
     "claude-cli": _make_claude_cli,
     "opencode": _make_opencode,
+    "gemini-cli": _make_gemini_cli,
 }
 
 
