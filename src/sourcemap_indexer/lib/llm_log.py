@@ -17,7 +17,6 @@ class LlmLog(Protocol):
         path: str,
         language: str,
         model: str,
-        messages: list[dict[str, str]],
         response_raw: str,
         result: str,
         finish_reason: str,
@@ -32,7 +31,6 @@ class _NoopLlmLog:
         path: str,
         language: str,
         model: str,
-        messages: list[dict[str, str]],
         response_raw: str,
         result: str,
         finish_reason: str,
@@ -50,7 +48,6 @@ class _FileLlmLog:
         path: str,
         language: str,
         model: str,
-        messages: list[dict[str, str]],
         response_raw: str,
         result: str,
         finish_reason: str,
@@ -62,7 +59,6 @@ class _FileLlmLog:
             "model": model,
             "result": result,
             "finish_reason": finish_reason or None,
-            "request": {"messages": messages},
             "response": response_raw or None,
         }
         try:

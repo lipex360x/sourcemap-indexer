@@ -185,7 +185,6 @@ class LlmClient:
         self,
         path: str,
         language: Language,
-        messages: list[dict[str, str]],
         result: str,
         response_raw: str = "",
         finish_reason: str = "",
@@ -195,7 +194,6 @@ class LlmClient:
                 path=path,
                 language=str(language),
                 model=self._config.model,
-                messages=messages,
                 response_raw=response_raw,
                 result=result,
                 finish_reason=finish_reason,
@@ -245,22 +243,21 @@ class LlmClient:
         body: dict[str, Any],
         path: str,
         language: Language,
-        messages: list[dict[str, str]],
     ) -> Either[str, EnrichmentResult]:
         last: Either[str, EnrichmentResult] = left("llm-parse-error")
         for attempt in range(2):
             post_result = self._post_with_json_fallback(body)
             if isinstance(post_result, Left):
-                self._log(path, language, messages, post_result.error)
+                self._log(path, language, post_result.error)
                 return post_result
             raw, finish_reason = post_result.value
             parsed = _parse_enrichment(raw)
             if isinstance(parsed, Right):
-                self._log(path, language, messages, "ok", raw, finish_reason)
+                self._log(path, language, "ok", raw, finish_reason)
                 return parsed
             if attempt == 0:
                 continue
-            self._log(path, language, messages, parsed.error, raw, finish_reason)
+            self._log(path, language, parsed.error, raw, finish_reason)
             last = parsed
         return last
 
@@ -292,7 +289,7 @@ class LlmClient:
         }
         if self._config.json_mode:
             body["response_format"] = {"type": "json_object"}
-        return self._attempt_and_retry(body, path, language, messages)
+        return self._attempt_and_retry(body, path, language)
 
 
 HttpLLMProvider = LlmClient

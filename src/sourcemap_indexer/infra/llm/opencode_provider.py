@@ -56,18 +56,12 @@ class OpenCodeProvider:
         else:
             self._system_prompt = SYSTEM_PROMPT
 
-    def _log(
-        self, path: str, language: Language, user_prompt: str, result: str, raw: str = ""
-    ) -> None:
+    def _log(self, path: str, language: Language, result: str, raw: str = "") -> None:
         if self._llm_log is not None:
             self._llm_log.record(
                 path=path,
                 language=str(language),
                 model=llm_cli_model() or "opencode",
-                messages=[
-                    {"role": "system", "content": self._system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
                 response_raw=raw,
                 result=result,
                 finish_reason="",
@@ -83,12 +77,6 @@ class OpenCodeProvider:
     ) -> Either[str, EnrichmentResult]:
         if not shutil.which("opencode"):
             return left("opencode-not-configured")
-        lang_str = str(language)
-        user_prompt = f"Path: {path}\nLanguage: {language}\n\n```{lang_str}\n{content}\n```"
-        if extra_instruction:
-            user_prompt += f"\n\nAdditional instruction: {extra_instruction}"
-        if import_context:
-            user_prompt += f"\n\n{import_context}"
         prompt = _build_prompt(
             self._system_prompt, path, language, content, extra_instruction, import_context
         )
@@ -101,9 +89,9 @@ class OpenCodeProvider:
             )
         except subprocess.CalledProcessError as exc:
             error = f"opencode-error: {exc.returncode}"
-            self._log(path, language, user_prompt, error)
+            self._log(path, language, error)
             return left(error)
         parsed = _parse_enrichment(proc.stdout.strip())
         result_label = "ok" if not isinstance(parsed, Left) else parsed.error
-        self._log(path, language, user_prompt, result_label, proc.stdout.strip())
+        self._log(path, language, result_label, proc.stdout.strip())
         return parsed

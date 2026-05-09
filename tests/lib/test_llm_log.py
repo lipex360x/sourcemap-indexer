@@ -12,10 +12,6 @@ _RECORD_KWARGS = {
     "path": "src/auth.py",
     "language": "py",
     "model": "my-model",
-    "messages": [
-        {"role": "system", "content": "You are a code analyser."},
-        {"role": "user", "content": "Path: src/auth.py\n\ndef verify(): ..."},
-    ],
     "response_raw": '{"purpose": "Validates JWT tokens"}',
     "result": "ok",
     "finish_reason": "stop",
@@ -73,12 +69,12 @@ def test_record_yaml_contains_metadata(tmp_path: Path) -> None:
     assert "ok" in content
 
 
-def test_record_yaml_contains_messages(tmp_path: Path) -> None:
+def test_record_yaml_omits_messages_field(tmp_path: Path) -> None:
     log = create_llm_log(tmp_path, environ=_LOG_ON)
     log.record(**_RECORD_KWARGS)
     content = next(tmp_path.glob("llm-*.yaml")).read_text()
-    assert "code analyser" in content
-    assert "verify" in content
+    assert "messages" not in content
+    assert "role:" not in content
 
 
 def test_record_yaml_contains_response(tmp_path: Path) -> None:

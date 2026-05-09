@@ -66,22 +66,29 @@ class GeminiCliProvider:
         else:
             self._system_prompt = SYSTEM_PROMPT
 
-    def _log(
-        self, path: str, language: Language, user_prompt: str, result: str, raw: str = ""
-    ) -> None:
+    def _log(self, path: str, language: Language, result: str, raw: str = "") -> None:
         if self._llm_log is not None:
             self._llm_log.record(
                 path=path,
                 language=str(language),
                 model=llm_cli_model() or "gemini-cli",
-                messages=[
-                    {"role": "system", "content": self._system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
                 response_raw=raw,
                 result=result,
                 finish_reason="",
             )
+
+    def _check_proc_failure(
+        self, path: str, language: Language, proc: subprocess.CompletedProcess[str]
+    ) -> Either[str, None]:
+        stderr = proc.stderr or ""
+        if _QUOTA_MARKER in stderr:
+            self._log(path, language, "gemini-cli-quota-exhausted", stderr)
+            return left("gemini-cli-quota-exhausted")
+        if proc.returncode != 0:
+            error = f"gemini-cli-error: {proc.returncode}"
+            self._log(path, language, error, stderr or proc.stdout)
+            return left(error)
+        return right(None)
 
     def enrich(
         self,
@@ -93,28 +100,25 @@ class GeminiCliProvider:
     ) -> Either[str, EnrichmentResult]:
         if not shutil.which("gemini"):
             return left("gemini-cli-not-configured")
-        user_prompt = _build_user_prompt(path, language, content, extra_instruction, import_context)
-        full_prompt = f"{self._system_prompt}\n\n---\n\n{user_prompt}"
-        try:
-            proc = subprocess.run(
-                _build_cmd(full_prompt),
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-        except subprocess.CalledProcessError as exc:
-            error = f"gemini-cli-error: {exc.returncode}"
-            self._log(path, language, user_prompt, error)
-            return left(error)
-        if _QUOTA_MARKER in (proc.stderr or ""):
-            self._log(path, language, user_prompt, "gemini-cli-quota-exhausted", proc.stderr)
-            return left("gemini-cli-quota-exhausted")
+        full_prompt = (
+            f"{self._system_prompt}\n\n---\n\n"
+            f"{_build_user_prompt(path, language, content, extra_instruction, import_context)}"
+        )
+        proc = subprocess.run(
+            _build_cmd(full_prompt),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        failure = self._check_proc_failure(path, language, proc)
+        if isinstance(failure, Left):
+            return left(failure.error)
         extracted = _extract_response(proc.stdout)
         if not isinstance(extracted, Right):
-            self._log(path, language, user_prompt, extracted.error, proc.stdout)
+            self._log(path, language, extracted.error, proc.stdout)
             return left(extracted.error)
         raw = extracted.value
         parsed = _parse_enrichment(raw)
         result_label = "ok" if not isinstance(parsed, Left) else parsed.error
-        self._log(path, language, user_prompt, result_label, raw)
+        self._log(path, language, result_label, raw)
         return parsed

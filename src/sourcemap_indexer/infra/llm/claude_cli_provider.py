@@ -67,16 +67,12 @@ class ClaudeCliProvider:
         else:
             self._system_prompt = SYSTEM_PROMPT
 
-    def _log(self, path: str, language: Language, prompt: str, result: str, raw: str = "") -> None:
+    def _log(self, path: str, language: Language, result: str, raw: str = "") -> None:
         if self._llm_log is not None:
             self._llm_log.record(
                 path=path,
                 language=str(language),
                 model=llm_cli_model() or "claude-cli",
-                messages=[
-                    {"role": "system", "content": self._system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
                 response_raw=raw,
                 result=result,
                 finish_reason="",
@@ -106,15 +102,15 @@ class ClaudeCliProvider:
             )
         except subprocess.CalledProcessError as exc:
             error = f"claude-cli-error: {exc.returncode}"
-            self._log(path, language, prompt, error)
+            self._log(path, language, error)
             return left(error)
         try:
             wrapper = json.loads(proc.stdout)
             raw = wrapper["result"]
         except (json.JSONDecodeError, KeyError):
-            self._log(path, language, prompt, "claude-cli-parse-error", proc.stdout)
+            self._log(path, language, "claude-cli-parse-error", proc.stdout)
             return left("claude-cli-parse-error")
         parsed = _parse_enrichment(raw)
         result_label = "ok" if not isinstance(parsed, Left) else parsed.error
-        self._log(path, language, prompt, result_label, raw)
+        self._log(path, language, result_label, raw)
         return parsed

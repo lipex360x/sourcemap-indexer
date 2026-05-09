@@ -156,11 +156,6 @@ def test_claude_cli_calls_llm_log_on_success(monkeypatch: pytest.MonkeyPatch) ->
     assert len(recorded) == 1
     assert recorded[0]["result"] == "ok"
     assert recorded[0]["path"] == "app.py"
-    messages = recorded[0]["messages"]
-    assert isinstance(messages, list)
-    roles = [m["role"] for m in messages]
-    assert "system" in roles
-    assert "user" in roles
 
 
 def test_claude_cli_factory_forwards_llm_log() -> None:
@@ -575,11 +570,6 @@ def test_opencode_calls_llm_log_on_success(monkeypatch: pytest.MonkeyPatch) -> N
     assert len(recorded) == 1
     assert recorded[0]["result"] == "ok"
     assert recorded[0]["path"] == "app.py"
-    messages = recorded[0]["messages"]
-    assert isinstance(messages, list)
-    roles = [m["role"] for m in messages]
-    assert "system" in roles
-    assert "user" in roles
 
 
 def test_opencode_factory_forwards_llm_log() -> None:
@@ -1026,7 +1016,9 @@ def test_gemini_cli_omits_model_flag_when_not_set(monkeypatch: pytest.MonkeyPatc
     assert "-m" not in captured[0]
 
 
-def test_gemini_cli_subprocess_error_returns_left(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gemini_cli_nonzero_exit_returns_left_and_logs_stderr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import shutil  # noqa: PLC0415
     import subprocess  # noqa: PLC0415
 
@@ -1035,17 +1027,28 @@ def test_gemini_cli_subprocess_error_returns_left(monkeypatch: pytest.MonkeyPatc
         GeminiCliProvider,
     )
 
+    stderr_blob = "Error when talking to Gemini API: model not found"
+
     def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        raise subprocess.CalledProcessError(1, args)
+        return subprocess.CompletedProcess(args, 1, stdout="", stderr=stderr_blob)
+
+    recorded: list[dict[str, object]] = []
+
+    class _SpyLog:
+        def record(self, **kwargs: object) -> None:
+            recorded.append(kwargs)
 
     monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
     monkeypatch.setattr(subprocess, "run", _fake_run)
-    result = GeminiCliProvider().enrich("app.py", Language.PY, "x = 1")
+    result = GeminiCliProvider(llm_log=_SpyLog()).enrich("app.py", Language.PY, "x = 1")
     assert isinstance(result, Left)
-    assert result.error.startswith("gemini-cli-error:")
+    assert result.error == "gemini-cli-error: 1"
+    assert recorded[0]["response_raw"] == stderr_blob
 
 
-def test_gemini_cli_quota_exhausted_returns_left(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gemini_cli_quota_exhausted_with_nonzero_exit_returns_left(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import shutil  # noqa: PLC0415
     import subprocess  # noqa: PLC0415
 
@@ -1057,9 +1060,9 @@ def test_gemini_cli_quota_exhausted_returns_left(monkeypatch: pytest.MonkeyPatch
     def _fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(
             args,
-            0,
-            stdout="",
-            stderr="Attempt 1 failed: You have exhausted your capacity on this model..",
+            1,
+            stdout='{"session_id": "x", "error": {"message": "quota"}}',
+            stderr="TerminalQuotaError: You have exhausted your capacity on this model.",
         )
 
     monkeypatch.setattr(shutil, "which", lambda _name: "/opt/homebrew/bin/gemini")
@@ -1164,11 +1167,6 @@ def test_gemini_cli_calls_llm_log_on_success(monkeypatch: pytest.MonkeyPatch) ->
     assert len(recorded) == 1
     assert recorded[0]["result"] == "ok"
     assert recorded[0]["path"] == "app.py"
-    messages = recorded[0]["messages"]
-    assert isinstance(messages, list)
-    roles = [m["role"] for m in messages]
-    assert "system" in roles
-    assert "user" in roles
 
 
 def test_gemini_cli_factory_forwards_llm_log() -> None:
@@ -1224,9 +1222,7 @@ def test_gemini_cli_appends_extra_instruction_and_import_context(
     full_prompt = " ".join(captured[0])
     assert "be terse" in full_prompt
     assert "Imports: foo, bar" in full_prompt
-    user_prompt = recorded[0]["messages"][1]["content"]  # type: ignore[index]
-    assert "be terse" in user_prompt
-    assert "Imports: foo, bar" in user_prompt
+    assert recorded[0]["result"] == "ok"
 
 
 def test_gemini_cli_strips_null_bytes_from_content(monkeypatch: pytest.MonkeyPatch) -> None:
