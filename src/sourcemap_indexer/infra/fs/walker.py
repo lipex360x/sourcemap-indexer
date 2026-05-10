@@ -22,6 +22,64 @@ _EXT_MAP: dict[str, Language] = {
     ".yml": Language.YAML,
     ".json": Language.JSON,
     ".toml": Language.TOML,
+    ".php": Language.PHP,
+    ".rb": Language.RUBY,
+    ".go": Language.GO,
+    ".rs": Language.RUST,
+    ".java": Language.JAVA,
+    ".kt": Language.KOTLIN,
+    ".kts": Language.KOTLIN,
+    ".swift": Language.SWIFT,
+    ".scala": Language.SCALA,
+    ".sc": Language.SCALA,
+    ".c": Language.C,
+    ".h": Language.C,
+    ".cpp": Language.CPP,
+    ".cc": Language.CPP,
+    ".cxx": Language.CPP,
+    ".hpp": Language.CPP,
+    ".hh": Language.CPP,
+    ".hxx": Language.CPP,
+    ".cs": Language.CSHARP,
+    ".m": Language.OBJC,
+    ".mm": Language.OBJC,
+    ".lua": Language.LUA,
+    ".dart": Language.DART,
+    ".ex": Language.ELIXIR,
+    ".exs": Language.ELIXIR,
+    ".erl": Language.ERLANG,
+    ".hrl": Language.ERLANG,
+    ".hs": Language.HASKELL,
+    ".ml": Language.OCAML,
+    ".mli": Language.OCAML,
+    ".clj": Language.CLOJURE,
+    ".cljs": Language.CLOJURE,
+    ".cljc": Language.CLOJURE,
+    ".edn": Language.CLOJURE,
+    ".pl": Language.PERL,
+    ".pm": Language.PERL,
+    ".r": Language.R,
+    ".jl": Language.JULIA,
+    ".vue": Language.VUE,
+    ".svelte": Language.SVELTE,
+    ".astro": Language.ASTRO,
+    ".css": Language.CSS,
+    ".scss": Language.SCSS,
+    ".less": Language.LESS,
+    ".html": Language.HTML,
+    ".htm": Language.HTML,
+    ".xml": Language.XML,
+    ".graphql": Language.GRAPHQL,
+    ".gql": Language.GRAPHQL,
+    ".proto": Language.PROTO,
+    ".tf": Language.TERRAFORM,
+    ".tfvars": Language.TERRAFORM,
+    ".nix": Language.NIX,
+}
+
+_NAME_MAP: dict[str, Language] = {
+    "dockerfile": Language.DOCKERFILE,
+    "makefile": Language.MAKEFILE,
 }
 
 
@@ -36,7 +94,10 @@ class WalkedFile:
 
 
 def detect_language(path: Path) -> Language:
-    return _EXT_MAP.get(path.suffix.lower(), Language.OTHER)
+    suffix = path.suffix.lower()
+    if suffix:
+        return _EXT_MAP.get(suffix, Language.OTHER)
+    return _NAME_MAP.get(path.name.lower(), Language.OTHER)
 
 
 def _resolve_sourcemapignore(root: Path, sourcemap_dir: Path | None) -> Path | None:

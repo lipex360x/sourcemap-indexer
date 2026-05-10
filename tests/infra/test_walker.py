@@ -59,6 +59,73 @@ def test_detect_language_unknown_extension() -> None:
     assert detect_language(Path("binary.exe")) == Language.OTHER
 
 
+@pytest.mark.parametrize(
+    ("filename", "language"),
+    [
+        ("model.php", Language.PHP),
+        ("script.rb", Language.RUBY),
+        ("server.go", Language.GO),
+        ("main.rs", Language.RUST),
+        ("Service.java", Language.JAVA),
+        ("App.kt", Language.KOTLIN),
+        ("build.gradle.kts", Language.KOTLIN),
+        ("View.swift", Language.SWIFT),
+        ("Pipeline.scala", Language.SCALA),
+        ("driver.c", Language.C),
+        ("header.h", Language.C),
+        ("vector.cpp", Language.CPP),
+        ("matrix.cc", Language.CPP),
+        ("util.cxx", Language.CPP),
+        ("vector.hpp", Language.CPP),
+        ("Program.cs", Language.CSHARP),
+        ("AppDelegate.m", Language.OBJC),
+        ("ViewController.mm", Language.OBJC),
+        ("init.lua", Language.LUA),
+        ("widget.dart", Language.DART),
+        ("module.ex", Language.ELIXIR),
+        ("script.exs", Language.ELIXIR),
+        ("server.erl", Language.ERLANG),
+        ("Lib.hs", Language.HASKELL),
+        ("module.ml", Language.OCAML),
+        ("module.mli", Language.OCAML),
+        ("core.clj", Language.CLOJURE),
+        ("core.cljs", Language.CLOJURE),
+        ("script.pl", Language.PERL),
+        ("Lib.pm", Language.PERL),
+        ("analysis.r", Language.R),
+        ("analysis.R", Language.R),
+        ("solver.jl", Language.JULIA),
+        ("App.vue", Language.VUE),
+        ("App.svelte", Language.SVELTE),
+        ("page.astro", Language.ASTRO),
+        ("style.css", Language.CSS),
+        ("theme.scss", Language.SCSS),
+        ("theme.less", Language.LESS),
+        ("index.html", Language.HTML),
+        ("index.htm", Language.HTML),
+        ("config.xml", Language.XML),
+        ("schema.graphql", Language.GRAPHQL),
+        ("schema.gql", Language.GRAPHQL),
+        ("user.proto", Language.PROTO),
+        ("main.tf", Language.TERRAFORM),
+        ("vars.tfvars", Language.TERRAFORM),
+        ("default.nix", Language.NIX),
+    ],
+)
+def test_detect_language_extended_extensions(filename: str, language: Language) -> None:
+    assert detect_language(Path(filename)) == language
+
+
+def test_detect_language_dockerfile_by_name() -> None:
+    assert detect_language(Path("Dockerfile")) == Language.DOCKERFILE
+    assert detect_language(Path("services/api/Dockerfile")) == Language.DOCKERFILE
+
+
+def test_detect_language_makefile_by_name() -> None:
+    assert detect_language(Path("Makefile")) == Language.MAKEFILE
+    assert detect_language(Path("subdir/Makefile")) == Language.MAKEFILE
+
+
 def test_load_ignore_patterns_without_sourcemapignore(tmp_path: Path) -> None:
     result = load_ignore_patterns(tmp_path)
     assert isinstance(result, Right)
@@ -136,6 +203,46 @@ def test_walk_project_respects_default_ignores(tmp_path: Path) -> None:
     assert isinstance(result, Right)
     paths = [f.path for f in result.value]
     assert all("node_modules" not in p for p in paths)
+
+
+@pytest.mark.parametrize(
+    "ignored_path",
+    [
+        "vendor/lib.php",
+        ".idea/workspace.xml",
+        ".vscode/settings.json",
+        ".DS_Store",
+        "subdir/.DS_Store",
+        "data.sqlite3",
+        "fonts/icons.woff",
+        "fonts/icons.woff2",
+        "fonts/icons.ttf",
+        "fonts/icons.otf",
+        "fonts/icons.eot",
+        "img/logo.png",
+        "img/photo.jpg",
+        "img/photo.jpeg",
+        "img/anim.gif",
+        "img/icon.svg",
+        "img/banner.webp",
+        "img/favicon.ico",
+        "img/sprite.bmp",
+        "img/scan.tiff",
+        "pnpm-lock.yaml",
+        "composer.lock",
+        "yarn.lock",
+    ],
+)
+def test_walk_project_default_ignores_extended(tmp_path: Path, ignored_path: str) -> None:
+    (tmp_path / "main.py").write_text("x = 1\n")
+    target = tmp_path / ignored_path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(b"data")
+    result = walk_project(tmp_path)
+    assert isinstance(result, Right)
+    paths = [f.path for f in result.value]
+    assert ignored_path not in paths
+    assert "main.py" in paths
 
 
 def test_walk_project_ignores_dotenv_by_default(tmp_path: Path) -> None:
